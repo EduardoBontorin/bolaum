@@ -3,13 +3,190 @@
     "rodada_atual": "dezesseis_avos"
   },
   "rodadas": {
-    "dezesseis_avos": { "status": "nao_iniciada", "jogos": [] },
-    "oitavas":        { "status": "nao_iniciada", "jogos": [] },
-    "quartas":        { "status": "nao_iniciada", "jogos": [] },
-    "semi":           { "status": "nao_iniciada", "jogos": [] },
-    "final":          { "status": "nao_iniciada", "jogos": [] }
+    "dezesseis_avos": {
+      "status": "nao_iniciada",
+      "jogos": [
+        {
+          "id": "R1G01",
+          "mandante": "Alemanha",
+          "visitante": "Escócia",
+          "placar_mandante": null,
+          "placar_visitante": null,
+          "resultado": null
+        },
+        {
+          "id": "R1G02",
+          "mandante": "França",
+          "visitante": "Irã",
+          "placar_mandante": null,
+          "placar_visitante": null,
+          "resultado": null
+        },
+        {
+          "id": "R1G03",
+          "mandante": "Coréia",
+          "visitante": "Canadá",
+          "placar_mandante": null,
+          "placar_visitante": null,
+          "resultado": null
+        },
+        {
+          "id": "R1G04",
+          "mandante": "Holanda",
+          "visitante": "Marrocos",
+          "placar_mandante": null,
+          "placar_visitante": null,
+          "resultado": null
+        },
+        {
+          "id": "R1G05",
+          "mandante": "Portugal",
+          "visitante": "Croácia",
+          "placar_mandante": null,
+          "placar_visitante": null,
+          "resultado": null
+        },
+        {
+          "id": "R1G06",
+          "mandante": "Espanha",
+          "visitante": "Austria",
+          "placar_mandante": null,
+          "placar_visitante": null,
+          "resultado": null
+        },
+        {
+          "id": "R1G07",
+          "mandante": "Estados Unidos",
+          "visitante": "Catar",
+          "placar_mandante": null,
+          "placar_visitante": null,
+          "resultado": null
+        },
+        {
+          "id": "R1G08",
+          "mandante": "Egito",
+          "visitante": "Uruguai",
+          "placar_mandante": null,
+          "placar_visitante": null,
+          "resultado": null
+        },
+        {
+          "id": "R1G09",
+          "mandante": "Brasil",
+          "visitante": "Suecia",
+          "placar_mandante": null,
+          "placar_visitante": null,
+          "resultado": null
+        },
+        {
+          "id": "R1G10",
+          "mandante": "Costa do Marfim",
+          "visitante": "Noruega",
+          "placar_mandante": null,
+          "placar_visitante": null,
+          "resultado": null
+        },
+        {
+          "id": "R1G11",
+          "mandante": "México",
+          "visitante": "Gana",
+          "placar_mandante": null,
+          "placar_visitante": null,
+          "resultado": null
+        },
+        {
+          "id": "R1G12",
+          "mandante": "Inglaterra",
+          "visitante": "Senegal",
+          "placar_mandante": null,
+          "placar_visitante": null,
+          "resultado": null
+        },
+        {
+          "id": "R1G13",
+          "mandante": "Argentina",
+          "visitante": "Cabo Verde",
+          "placar_mandante": null,
+          "placar_visitante": null,
+          "resultado": null
+        },
+        {
+          "id": "R1G14",
+          "mandante": "Austrália",
+          "visitante": "Bélgica",
+          "placar_mandante": null,
+          "placar_visitante": null,
+          "resultado": null
+        },
+        {
+          "id": "R1G15",
+          "mandante": "Suiça",
+          "visitante": "Japão",
+          "placar_mandante": null,
+          "placar_visitante": null,
+          "resultado": null
+        },
+        {
+          "id": "R1G16",
+          "mandante": "Colombia",
+          "visitante": "Paraguai",
+          "placar_mandante": null,
+          "placar_visitante": null,
+          "resultado": null
+        }
+      ]
+    },
+    "oitavas": {
+      "status": "nao_iniciada",
+      "jogos": []
+    },
+    "quartas": {
+      "status": "nao_iniciada",
+      "jogos": []
+    },
+    "semi": {
+      "status": "nao_iniciada",
+      "jogos": []
+    },
+    "final": {
+      "status": "nao_iniciada",
+      "jogos": []
+    }
   },
-  "participantes": [],
-  "palpites": {},
-  "pontuacao": {}
+  "participantes": [
+    "Danilo",
+    "Gustavo",
+    "Eduardo"
+  ],
+  "palpites": {
+    "Danilo": {},
+    "Gustavo": {},
+    "Eduardo": {}
+  },
+  "pontuacao": {
+    "Danilo": {
+      "dezesseis_avos": 0,
+      "oitavas": 0,
+      "quartas": 0,
+      "semi": 0,
+      "final": 0,
+      "total": 0
+    },
+    "Gustavo": {
+      "dezesseis_avos": 0,
+      "oitavas": 0,
+      "quartas": 0,
+      "semi": 0,
+      "final": 0,
+      "total": 0
+    },
+    "Eduardo": {
+      "dezesseis_avos": 0,
+      "oitavas": 0,
+      "quartas": 0,
+      "semi": 0,
+      "final": 0,
+      "total": 0
+    }
+  }
 }
