@@ -230,34 +230,53 @@ function renderRodadaAdmin() {
   const rodadaAtual = data.config.rodada_atual;
   const rodadaData  = data.rodadas[rodadaAtual];
   const estrutura   = BRACKET_ESTRUTURA[rodadaAtual];
+  const status      = rodadaData.status;
+
+  const instrucoes = {
+    nao_iniciada: 'Preencha os times abaixo, salve e clique <strong>Abrir rodada</strong> para liberar os palpites.',
+    aberta:       'Rodada aberta — participantes podem palpitar. Quando os jogos começarem, clique <strong>Fechar rodada</strong>.',
+    fechada:      'Rodada fechada para palpites. Vá em <strong>Resultados</strong> para inserir os placares e calcular os pontos.',
+    concluida:    'Pontos calculados. Preencha os times da próxima fase e clique <strong>Abrir próxima rodada</strong>.'
+  };
 
   document.getElementById('rodada-status-painel').innerHTML = `
     <div class="alert alert-info">
-      Rodada atual: <strong>${RODADA_LABELS[rodadaAtual]}</strong>
-      &nbsp;<span class="status-badge status-${rodadaData.status}">${rodadaData.status.replace('_', ' ')}</span>
+      <div>Rodada atual: <strong>${RODADA_LABELS[rodadaAtual]}</strong>
+      &nbsp;<span class="status-badge status-${status}">${status.replace('_', ' ')}</span></div>
+      <div style="margin-top:0.5rem;font-size:0.85rem">${instrucoes[status] || ''}</div>
     </div>`;
 
+  // Show team inputs only when not yet concluded
   const form = document.getElementById('rodada-times-form');
-  const jogosExistentes = Object.fromEntries((rodadaData.jogos || []).map(j => [j.id, j]));
+  if (status === 'fechada') {
+    form.innerHTML = `<p style="color:#8fa8c0;font-size:0.9rem">Insira os resultados na aba <strong style="color:#f5a623">Resultados</strong>.</p>`;
+  } else {
+    const jogosExistentes = Object.fromEntries((rodadaData.jogos || []).map(j => [j.id, j]));
+    form.innerHTML = estrutura.map(slot => {
+      const jogo   = jogosExistentes[slot.id] || {};
+      const labelM = slot.label_mandante  || `Vencedor de ${slot.origem_mandante}`;
+      const labelV = slot.label_visitante || `Vencedor de ${slot.origem_visitante}`;
+      return `
+        <div class="admin-jogo-card" data-slot-id="${slot.id}">
+          <h4>${slot.id} &nbsp;|&nbsp; <em>${labelM}</em> vs <em>${labelV}</em></h4>
+          <div class="placar-row">
+            <input class="input-text" type="text" data-campo="mandante"
+              placeholder="${labelM}" value="${jogo.mandante || ''}"
+              style="min-width:0;flex:1">
+            <span style="color:#8fa8c0;padding:0 0.5rem">x</span>
+            <input class="input-text" type="text" data-campo="visitante"
+              placeholder="${labelV}" value="${jogo.visitante || ''}"
+              style="min-width:0;flex:1">
+          </div>
+        </div>`;
+    }).join('');
+  }
 
-  form.innerHTML = estrutura.map(slot => {
-    const jogo = jogosExistentes[slot.id] || {};
-    const labelM = slot.label_mandante  || `Vencedor de ${slot.origem_mandante}`;
-    const labelV = slot.label_visitante || `Vencedor de ${slot.origem_visitante}`;
-    return `
-      <div class="admin-jogo-card" data-slot-id="${slot.id}">
-        <h4>${slot.id} &nbsp;|&nbsp; <em>${labelM}</em> vs <em>${labelV}</em></h4>
-        <div class="placar-row">
-          <input class="input-text" type="text" data-campo="mandante"
-            placeholder="${labelM}" value="${jogo.mandante || ''}"
-            style="min-width:0;flex:1">
-          <span style="color:#8fa8c0;padding:0 0.5rem">x</span>
-          <input class="input-text" type="text" data-campo="visitante"
-            placeholder="${labelV}" value="${jogo.visitante || ''}"
-            style="min-width:0;flex:1">
-        </div>
-      </div>`;
-  }).join('');
+  // Show/hide buttons based on status
+  document.getElementById('btn-salvar-times').style.display  = (status === 'nao_iniciada' || status === 'aberta') ? '' : 'none';
+  document.getElementById('btn-abrir-rodada').style.display  = status === 'nao_iniciada' ? '' : 'none';
+  document.getElementById('btn-fechar-rodada').style.display = status === 'aberta'       ? '' : 'none';
+  document.getElementById('btn-abrir-proxima').style.display = (status === 'concluida' || status === 'fechada') ? '' : 'none';
 
   document.getElementById('btn-salvar-times').onclick = () => {
     const state = getState() || emptyState();
@@ -281,13 +300,22 @@ function renderRodadaAdmin() {
     alert('Times salvos. Não esqueça de Exportar JSON.');
   };
 
+  document.getElementById('btn-abrir-rodada').onclick = () => {
+    if (!confirm(`Abrir "${RODADA_LABELS[rodadaAtual]}" para palpites? Certifique-se de que os times já estão salvos.`)) return;
+    const state = getState() || emptyState();
+    state.rodadas[rodadaAtual].status = 'aberta';
+    setState(state);
+    renderRodadaAdmin();
+    alert(`"${RODADA_LABELS[rodadaAtual]}" aberta. Exporte o JSON e faça push para liberar palpites no site.`);
+  };
+
   document.getElementById('btn-fechar-rodada').onclick = () => {
     if (!confirm(`Fechar "${RODADA_LABELS[rodadaAtual]}"? Participantes não poderão mais alterar palpites.`)) return;
     const state = getState() || emptyState();
     state.rodadas[rodadaAtual].status = 'fechada';
     setState(state);
     renderRodadaAdmin();
-    alert('Rodada fechada.');
+    alert('Rodada fechada. Vá em "Resultados" para inserir os placares.');
   };
 
   document.getElementById('btn-abrir-proxima').onclick = () => {
@@ -295,14 +323,14 @@ function renderRodadaAdmin() {
     if (idx === RODADAS.length - 1) { alert('Esta é a última rodada.'); return; }
     const proxima = RODADAS[idx + 1];
     if (rodadaData.status !== 'concluida') {
-      if (!confirm('A rodada atual ainda não está concluída (pontos não calculados). Deseja abrir a próxima mesmo assim?')) return;
+      if (!confirm('Os pontos desta rodada ainda não foram calculados. Deseja abrir a próxima mesmo assim?')) return;
     }
     const state = getState() || emptyState();
-    state.config.rodada_atual       = proxima;
-    state.rodadas[proxima].status   = 'aberta';
+    state.config.rodada_atual     = proxima;
+    state.rodadas[proxima].status = 'aberta';
     setState(state);
     renderRodadaAdmin();
-    alert(`"${RODADA_LABELS[proxima]}" aberta.`);
+    alert(`"${RODADA_LABELS[proxima]}" aberta. Preencha os times, exporte o JSON e faça push.`);
   };
 }
 
