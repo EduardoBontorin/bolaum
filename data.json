@@ -159,9 +159,258 @@
     "Eduardo"
   ],
   "palpites": {
-    "Danilo": {},
-    "Gustavo": {},
-    "Eduardo": {}
+    "Danilo": {
+      "dezesseis_avos": {
+        "R1G01": {
+          "placar_mandante": 1,
+          "placar_visitante": 0,
+          "passou": "Alemanha"
+        },
+        "R1G02": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        },
+        "R1G03": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        },
+        "R1G04": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        },
+        "R1G05": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        },
+        "R1G06": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        },
+        "R1G07": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        },
+        "R1G08": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        },
+        "R1G09": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        },
+        "R1G10": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        },
+        "R1G11": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        },
+        "R1G12": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        },
+        "R1G13": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        },
+        "R1G14": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        },
+        "R1G15": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        },
+        "R1G16": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        }
+      }
+    },
+    "Gustavo": {
+      "dezesseis_avos": {
+        "R1G01": {
+          "placar_mandante": 0,
+          "placar_visitante": 1,
+          "passou": "Escócia"
+        },
+        "R1G02": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        },
+        "R1G03": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        },
+        "R1G04": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        },
+        "R1G05": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        },
+        "R1G06": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        },
+        "R1G07": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        },
+        "R1G08": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        },
+        "R1G09": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        },
+        "R1G10": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        },
+        "R1G11": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        },
+        "R1G12": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        },
+        "R1G13": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        },
+        "R1G14": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        },
+        "R1G15": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        },
+        "R1G16": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        }
+      }
+    },
+    "Eduardo": {
+      "dezesseis_avos": {
+        "R1G01": {
+          "placar_mandante": 2,
+          "placar_visitante": 0,
+          "passou": "Alemanha"
+        },
+        "R1G02": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        },
+        "R1G03": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        },
+        "R1G04": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        },
+        "R1G05": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        },
+        "R1G06": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        },
+        "R1G07": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        },
+        "R1G08": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        },
+        "R1G09": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        },
+        "R1G10": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        },
+        "R1G11": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        },
+        "R1G12": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        },
+        "R1G13": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        },
+        "R1G14": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        },
+        "R1G15": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        },
+        "R1G16": {
+          "placar_mandante": 0,
+          "placar_visitante": 0,
+          "passou": ""
+        }
+      }
+    }
   },
   "pontuacao": {
     "Danilo": {
