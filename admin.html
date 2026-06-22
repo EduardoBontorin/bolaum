@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin — Bolão Copa 2026</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="admin-body">
+  <header class="site-header">
+    <h1>⚽ Bolão Copa 2026 — Admin</h1>
+    <a href="index.html" class="header-link">← Site público</a>
+  </header>
+
+  <nav class="admin-nav">
+    <button class="btn btn-secondary" data-sec="dados">Dados</button>
+    <button class="btn btn-secondary" data-sec="participantes">Participantes</button>
+    <button class="btn btn-secondary" data-sec="palpites">Palpites</button>
+    <button class="btn btn-secondary" data-sec="rodada">Rodada</button>
+    <button class="btn btn-secondary" data-sec="resultados">Resultados</button>
+  </nav>
+
+  <!-- Dados -->
+  <section id="sec-dados" class="admin-section active">
+    <h2>Gerenciar Dados</h2>
+    <div class="alert alert-info">
+      Fluxo: <strong>Importar</strong> o data.json atual → fazer alterações → <strong>Exportar</strong> → substituir arquivo no repositório → commit + push no GitHub.
+    </div>
+    <div class="form-group" style="margin-top:1.5rem">
+      <div>
+        <label>Importar data.json atual do repositório:</label>
+        <input type="file" id="import-file" accept=".json" style="display:none">
+        <button class="btn btn-secondary" id="btn-import-trigger">Importar JSON</button>
+      </div>
+      <div>
+        <label>Baixar o JSON atualizado para commit:</label>
+        <button class="btn btn-primary" id="btn-export">Exportar JSON</button>
+      </div>
+    </div>
+    <div id="dados-status"></div>
+  </section>
+
+  <!-- Participantes -->
+  <section id="sec-participantes" class="admin-section">
+    <h2>Participantes</h2>
+    <div id="participant-list" class="participant-list"></div>
+    <div class="form-group">
+      <div>
+        <label for="input-new-participant">Novo participante:</label>
+        <input type="text" id="input-new-participant" class="input-text" placeholder="Nome do participante">
+      </div>
+      <button class="btn btn-success" id="btn-add-participant" style="align-self:flex-end">Adicionar</button>
+    </div>
+  </section>
+
+  <!-- Palpites -->
+  <section id="sec-palpites" class="admin-section">
+    <h2>Palpites por Participante</h2>
+    <div class="form-group">
+      <div>
+        <label for="select-participant">Participante:</label>
+        <select id="select-participant" class="select-field">
+          <option value="">-- selecione --</option>
+        </select>
+      </div>
+      <div>
+        <label for="select-rodada-palpite">Rodada:</label>
+        <select id="select-rodada-palpite" class="select-field"></select>
+      </div>
+    </div>
+    <div id="palpites-admin-form"></div>
+    <div style="margin-top:1rem">
+      <button id="btn-salvar-palpite-admin" class="btn btn-success" style="display:none">Salvar palpites</button>
+    </div>
+  </section>
+
+  <!-- Rodada -->
+  <section id="sec-rodada" class="admin-section">
+    <h2>Gerenciar Rodada</h2>
+    <div id="rodada-status-painel"></div>
+    <div style="margin-top:1.5rem">
+      <h3 style="margin-bottom:1rem;font-size:1rem;color:#e8eaf0">Times da rodada atual</h3>
+      <div id="rodada-times-form"></div>
+      <div style="margin-top:1rem;display:flex;gap:0.75rem;flex-wrap:wrap">
+        <button id="btn-salvar-times" class="btn btn-secondary">Salvar times</button>
+        <button id="btn-fechar-rodada" class="btn btn-danger">Fechar rodada</button>
+        <button id="btn-abrir-proxima" class="btn btn-success">Abrir próxima rodada</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Resultados -->
+  <section id="sec-resultados" class="admin-section">
+    <h2>Resultados da Rodada</h2>
+    <div id="resultados-form"></div>
+    <div style="margin-top:1rem;display:flex;gap:0.75rem;flex-wrap:wrap">
+      <button id="btn-salvar-resultados" class="btn btn-secondary">Salvar resultados</button>
+      <button id="btn-calcular-pontos" class="btn btn-primary">Calcular pontos</button>
+    </div>
+  </section>
+
+  <script type="module" src="js/admin.js"></script>
+</body>
+</html>
