@@ -163,10 +163,8 @@ async function carregarEInicializar(user) {
     ]);
     renderBracket(dados);
     renderClassificacao(pontuacao, participantes);
-    // initPalpitar e initPalpitesTab são adicionadas nos Tasks 4 e 5;
-    // o try/catch silencia o ReferenceError durante a execução parcial do plano.
-    try { await initPalpitar(user, dados); } catch {}
-    try { initPalpitesTab(user, dados, participantes); } catch {}
+    await initPalpitar(user, dados);
+    initPalpitesTab(user, dados, participantes);
   } catch (e) {
     document.getElementById('bracket-container').innerHTML =
       `<p style="color:#ff6b6b">Erro ao carregar dados: ${e.message}</p>`;
