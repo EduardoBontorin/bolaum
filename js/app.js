@@ -173,6 +173,144 @@ async function carregarEInicializar(user) {
   }
 }
 
+// ── Palpitar ──────────────────────────────────────────────────────
+function isPalpitesBloqueado(rodadaData) {
+  if (!rodadaData.horario_abertura) return false;
+  const cutoff = new Date(rodadaData.horario_abertura).getTime() - 60 * 60 * 1000;
+  return Date.now() >= cutoff;
+}
+
+function renderPalpiteCards(jogos, palpitesRodada, bloqueado) {
+  const list = document.getElementById('palpite-list-inner');
+  if (!list) return;
+
+  list.innerHTML = jogos.map(jogo => {
+    const p = palpitesRodada[jogo.id] || {};
+    const mVal = p.placar_mandante ?? '';
+    const vVal = p.placar_visitante ?? '';
+    const isEmpate = mVal !== '' && vVal !== '' && Number(mVal) === Number(vVal);
+    const disabled = bloqueado ? 'disabled' : '';
+
+    return `
+      <div class="palpite-card" data-jogo-id="${jogo.id}">
+        <h3>${jogo.id}: ${jogo.mandante} x ${jogo.visitante}</h3>
+        <div class="placar-row">
+          <span class="team-name">${jogo.mandante}</span>
+          <input class="placar-input" type="number" min="0" max="20"
+            data-campo="placar_mandante" value="${mVal}" placeholder="0" ${disabled}>
+          <span style="color:#8fa8c0">x</span>
+          <input class="placar-input" type="number" min="0" max="20"
+            data-campo="placar_visitante" value="${vVal}" placeholder="0" ${disabled}>
+          <span class="team-name right">${jogo.visitante}</span>
+        </div>
+        <div class="passou-row">
+          <label class="passou-label${isEmpate ? ' penaltis' : ''}">${isEmpate ? 'Quem passa nos pênaltis?' : 'Quem avança:'}</label>
+          <select class="passou-select" data-campo="passou" ${disabled}>
+            <option value="">-- selecione --</option>
+            <option value="${jogo.mandante}" ${p.passou === jogo.mandante ? 'selected' : ''}>${jogo.mandante}</option>
+            <option value="${jogo.visitante}" ${p.passou === jogo.visitante ? 'selected' : ''}>${jogo.visitante}</option>
+          </select>
+        </div>
+      </div>`;
+  }).join('');
+
+  if (!bloqueado) {
+    list.querySelectorAll('.palpite-card').forEach(card => {
+      const mInput = card.querySelector('[data-campo="placar_mandante"]');
+      const vInput = card.querySelector('[data-campo="placar_visitante"]');
+      const label  = card.querySelector('.passou-label');
+      const updateLabel = () => {
+        const m = mInput.value, v = vInput.value;
+        const empate = m !== '' && v !== '' && Number(m) === Number(v);
+        label.textContent = empate ? 'Quem passa nos pênaltis?' : 'Quem avança:';
+        label.classList.toggle('penaltis', empate);
+      };
+      mInput.addEventListener('input', updateLabel);
+      vInput.addEventListener('input', updateLabel);
+    });
+  }
+}
+
+async function salvarPalpites(nome, rodadaAtual) {
+  const novosRodada = {};
+  document.querySelectorAll('.palpite-card').forEach(card => {
+    const jogoId          = card.dataset.jogoId;
+    const placar_mandante = Number(card.querySelector('[data-campo="placar_mandante"]').value);
+    const placar_visitante= Number(card.querySelector('[data-campo="placar_visitante"]').value);
+    const passou          = card.querySelector('[data-campo="passou"]').value;
+    novosRodada[jogoId]   = { placar_mandante, placar_visitante, passou };
+  });
+
+  const ref     = doc(db, 'palpites', nome);
+  const current = await getDoc(ref);
+  const existing = current.exists() ? current.data() : {};
+  existing[rodadaAtual] = novosRodada;
+  await setDoc(ref, existing);
+}
+
+async function initPalpitar(user, dados) {
+  const form   = document.getElementById('palpitar-form');
+  const acoes  = document.getElementById('palpitar-acoes');
+  const rodadaAtual = dados.config.rodada_atual;
+  const rodadaData  = dados.rodadas[rodadaAtual];
+
+  if (!rodadaData || rodadaData.status === 'nao_iniciada') {
+    form.innerHTML = `<div class="rodada-fechada-aviso">Nenhuma rodada aberta. Aguarde o admin.</div>`;
+    acoes.innerHTML = '';
+    return;
+  }
+
+  if (rodadaData.status === 'fechada' || rodadaData.status === 'concluida') {
+    form.innerHTML = `<div class="rodada-fechada-aviso">Rodada encerrada. Não é mais possível alterar palpites.</div>`;
+    acoes.innerHTML = '';
+    return;
+  }
+
+  const bloqueado = isPalpitesBloqueado(rodadaData);
+
+  let headerHtml = '';
+  if (rodadaData.horario_abertura) {
+    const dt = new Date(rodadaData.horario_abertura);
+    headerHtml = `<p class="rodada-horario">Início da rodada: <strong>${dt.toLocaleString('pt-BR')}</strong>${bloqueado ? ' — <span style="color:#ff8a8a">palpites encerrados</span>' : ' — palpites fecham 1h antes'}</p>`;
+  }
+
+  if (bloqueado) {
+    form.innerHTML = headerHtml + `<div class="rodada-fechada-aviso">Palpites encerrados — jogos começam em breve.</div>`;
+    acoes.innerHTML = '';
+    return;
+  }
+
+  const jogos = rodadaData.jogos || [];
+  if (!jogos.length) {
+    form.innerHTML = headerHtml + `<p style="color:#8fa8c0">Aguardando admin preencher os times.</p>`;
+    acoes.innerHTML = '';
+    return;
+  }
+
+  const palpitesUsuario = await carregarPalpitesUsuario(user.nome);
+  const palpitesRodada  = palpitesUsuario[rodadaAtual] || {};
+
+  form.innerHTML = headerHtml + `<div class="palpite-list"><div id="palpite-list-inner"></div></div>`;
+  acoes.innerHTML = `<button class="btn btn-primary" id="btn-salvar-palpites">Salvar palpites</button>`;
+
+  renderPalpiteCards(jogos, palpitesRodada, false);
+
+  document.getElementById('btn-salvar-palpites').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-salvar-palpites');
+    btn.disabled = true;
+    btn.textContent = 'Salvando...';
+    try {
+      await salvarPalpites(user.nome, rodadaAtual);
+      btn.textContent = 'Salvo!';
+      setTimeout(() => { btn.disabled = false; btn.textContent = 'Salvar palpites'; }, 2000);
+    } catch (e) {
+      alert('Erro ao salvar: ' + e.message);
+      btn.disabled = false;
+      btn.textContent = 'Salvar palpites';
+    }
+  });
+}
+
 // ── Entry point ───────────────────────────────────────────────────
 async function init() {
   document.getElementById('landing-btn').addEventListener('click', handleLogin);
