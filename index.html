@@ -8,29 +8,37 @@
 </head>
 <body>
 
-  <!-- Tela inicial -->
+  <!-- Tela de login -->
   <div id="landing" class="landing-overlay">
     <div class="landing-card">
       <div class="landing-icon">⚽</div>
       <h2>Bolão Copa 2026</h2>
-      <p class="landing-subtitle">Digite seu nome para entrar</p>
+      <p class="landing-subtitle">Entre com seu nome e senha</p>
       <input id="landing-nome" class="landing-input" type="text"
              placeholder="Seu nome" autocomplete="off">
+      <input id="landing-senha" class="landing-input" type="password"
+             placeholder="Senha" autocomplete="off">
       <button id="landing-btn" class="btn btn-primary landing-btn-enter">Entrar</button>
       <p id="landing-msg" class="landing-msg"></p>
     </div>
   </div>
 
-  <!-- Conteúdo principal (visível após login) -->
+  <!-- Conteúdo principal -->
   <div id="main-content" style="display:none">
     <header class="site-header">
       <h1>⚽ Bolão Copa 2026</h1>
-      <span id="header-nome" class="header-nome"></span>
+      <div class="header-actions">
+        <span id="header-nome" class="header-nome"></span>
+        <a id="admin-link" href="admin.html" class="header-link" style="display:none">Admin</a>
+        <button id="btn-logout" class="btn btn-secondary"
+                style="font-size:0.8rem;padding:0.3rem 0.7rem">Sair</button>
+      </div>
     </header>
 
     <nav class="tabs">
       <button class="tab-btn active" data-tab="chaveamento">Chaveamento</button>
       <button class="tab-btn" data-tab="palpitar">Palpitar</button>
+      <button class="tab-btn" data-tab="palpites">Palpites</button>
       <button class="tab-btn" data-tab="classificacao">Classificação</button>
     </nav>
 
@@ -43,10 +51,18 @@
 
     <!-- Palpitar -->
     <section id="tab-palpitar" class="tab-panel">
-      <div id="palpitar-form">
-        <p style="color:#8fa8c0">Carregando...</p>
-      </div>
+      <div id="palpitar-form"></div>
       <div id="palpitar-acoes" style="margin-top:1rem;display:flex;gap:0.75rem;flex-wrap:wrap"></div>
+    </section>
+
+    <!-- Palpites -->
+    <section id="tab-palpites" class="tab-panel">
+      <div class="palpites-tab-controls">
+        <button class="btn btn-secondary palpites-mode-btn active" data-mode="jogo">Por jogo</button>
+        <button class="btn btn-secondary palpites-mode-btn" data-mode="participante">Por participante</button>
+      </div>
+      <div id="palpites-select-container" style="margin-bottom:1rem"></div>
+      <div id="palpites-content"></div>
     </section>
 
     <!-- Classificação -->
@@ -54,13 +70,8 @@
       <table class="classificacao-table">
         <thead>
           <tr>
-            <th>#</th>
-            <th>Participante</th>
-            <th>16 Avos</th>
-            <th>Oitavas</th>
-            <th>Quartas</th>
-            <th>Semi</th>
-            <th>Final</th>
+            <th>#</th><th>Participante</th>
+            <th>16 Avos</th><th>Oitavas</th><th>Quartas</th><th>Semi</th><th>Final</th>
             <th>Total</th>
           </tr>
         </thead>
