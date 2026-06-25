@@ -1,13 +1,45 @@
 import { BRACKET_ESTRUTURA, RODADAS, RODADA_LABELS } from './bracket.js';
+import { db, doc, getDoc, setDoc, getDocs, collection } from './firebase.js';
+import { getSession, saveSession, clearSession } from './auth.js';
 
-// ── Data loading ──────────────────────────────────────────────────
-async function carregarDados() {
-  const res = await fetch('data.json?t=' + Date.now());
-  if (!res.ok) throw new Error('Falha ao carregar data.json');
-  return res.json();
+// ── Auth ──────────────────────────────────────────────────────────
+async function handleLogin() {
+  const nome  = document.getElementById('landing-nome').value.trim();
+  const senha = document.getElementById('landing-senha').value;
+  const msg   = document.getElementById('landing-msg');
+  msg.textContent = '';
+
+  if (!nome || !senha) { msg.textContent = 'Preencha nome e senha.'; return; }
+
+  try {
+    const snap = await getDoc(doc(db, 'usuarios', nome));
+    if (!snap.exists() || snap.data().senha !== senha) {
+      msg.textContent = 'Nome ou senha incorretos.';
+      return;
+    }
+    const user = { nome, isAdmin: snap.data().isAdmin || false };
+    saveSession(user);
+    mostrarApp(user);
+  } catch (e) {
+    msg.textContent = 'Erro ao conectar. Tente novamente.';
+  }
 }
 
-// ── Tab navigation ────────────────────────────────────────────────
+function handleLogout() {
+  clearSession();
+  window.location.reload();
+}
+
+function mostrarApp(user) {
+  document.getElementById('landing').style.display = 'none';
+  document.getElementById('main-content').style.display = '';
+  document.getElementById('header-nome').textContent = user.nome;
+  if (user.isAdmin) document.getElementById('admin-link').style.display = '';
+  initTabs();
+  carregarEInicializar(user);
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────
 function initTabs() {
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -19,12 +51,51 @@ function initTabs() {
   });
 }
 
+// ── Data loading ──────────────────────────────────────────────────
+async function carregarDados() {
+  const snaps = await Promise.all([
+    getDoc(doc(db, 'config', 'app')),
+    ...RODADAS.map(r => getDoc(doc(db, 'rodadas', r)))
+  ]);
+  const config   = snaps[0].exists() ? snaps[0].data() : { rodada_atual: 'dezesseis_avos' };
+  const rodadas  = {};
+  RODADAS.forEach((r, i) => {
+    rodadas[r] = snaps[i + 1].exists()
+      ? snaps[i + 1].data()
+      : { status: 'nao_iniciada', jogos: [] };
+  });
+  return { config, rodadas };
+}
+
+async function carregarPalpitesUsuario(nome) {
+  const snap = await getDoc(doc(db, 'palpites', nome));
+  return snap.exists() ? snap.data() : {};
+}
+
+async function carregarTodosPalpites() {
+  const snap = await getDocs(collection(db, 'palpites'));
+  const result = {};
+  snap.forEach(d => { result[d.id] = d.data(); });
+  return result;
+}
+
+async function carregarTodosParticipantes() {
+  const snap = await getDocs(collection(db, 'usuarios'));
+  return snap.docs.map(d => d.id).sort();
+}
+
+async function carregarPontuacao() {
+  const snap = await getDocs(collection(db, 'pontuacao'));
+  const result = {};
+  snap.forEach(d => { result[d.id] = d.data(); });
+  return result;
+}
+
 // ── Chaveamento ───────────────────────────────────────────────────
 function renderTeamRow(team, placar, isVencedor) {
   const isEmpty = !team;
   const scoreHtml = isVencedor !== null && placar !== null && placar !== undefined
-    ? `<span class="bracket-score">${placar}</span>`
-    : '';
+    ? `<span class="bracket-score">${placar}</span>` : '';
   return `<div class="bracket-team ${isVencedor ? 'vencedor' : ''} ${isEmpty ? 'placeholder' : ''}">
     <span>${team || 'A definir'}</span>${scoreHtml}
   </div>`;
@@ -33,183 +104,85 @@ function renderTeamRow(team, placar, isVencedor) {
 function renderBracket(data) {
   const container = document.getElementById('bracket-container');
   container.innerHTML = '';
-
   for (const rodada of RODADAS) {
-    const estrutura = BRACKET_ESTRUTURA[rodada];
-    const jogosData = data.rodadas[rodada]?.jogos ?? [];
-    const jogoMap = Object.fromEntries(jogosData.map(j => [j.id, j]));
-
-    const col = document.createElement('div');
-    col.className = 'bracket-round';
-    col.innerHTML = `<div class="bracket-round-title">${RODADA_LABELS[rodada]}</div>`;
-
+    const estrutura  = BRACKET_ESTRUTURA[rodada];
+    const jogosData  = data.rodadas[rodada]?.jogos ?? [];
+    const jogoMap    = Object.fromEntries(jogosData.map(j => [j.id, j]));
+    const col        = document.createElement('div');
+    col.className    = 'bracket-round';
+    col.innerHTML    = `<div class="bracket-round-title">${RODADA_LABELS[rodada]}</div>`;
     for (const slot of estrutura) {
-      const jogo = jogoMap[slot.id] || null;
-      const mandante = jogo?.mandante || (rodada === 'dezesseis_avos' ? slot.label_mandante : null);
+      const jogo      = jogoMap[slot.id] || null;
+      const mandante  = jogo?.mandante  || (rodada === 'dezesseis_avos' ? slot.label_mandante  : null);
       const visitante = jogo?.visitante || (rodada === 'dezesseis_avos' ? slot.label_visitante : null);
       const resultado = jogo?.resultado ?? null;
-      const temResultado = resultado !== null;
-
-      const wrapper = document.createElement('div');
+      const temRes    = resultado !== null;
+      const wrapper   = document.createElement('div');
       wrapper.className = 'bracket-match-wrapper';
       wrapper.innerHTML = `
         <div class="bracket-match" style="flex:1">
-          ${renderTeamRow(mandante, jogo?.placar_mandante, temResultado ? resultado === mandante : null)}
-          ${renderTeamRow(visitante, jogo?.placar_visitante, temResultado ? resultado === visitante : null)}
+          ${renderTeamRow(mandante,  jogo?.placar_mandante,  temRes ? resultado === mandante  : null)}
+          ${renderTeamRow(visitante, jogo?.placar_visitante, temRes ? resultado === visitante : null)}
         </div>`;
       col.appendChild(wrapper);
     }
-
     container.appendChild(col);
   }
 }
 
-// ── LocalStorage palpites ──────────────────────────────────────────
-function salvarPalpiteLocal(nome, rodada, jogoId, palpite) {
-  const key = `bolao_palpites_${nome}`;
-  const all = JSON.parse(localStorage.getItem(key) || '{}');
-  if (!all[rodada]) all[rodada] = {};
-  all[rodada][jogoId] = palpite;
-  localStorage.setItem(key, JSON.stringify(all));
-}
-
-function carregarPalpitesLocal(nome) {
-  const key = `bolao_palpites_${nome}`;
-  return JSON.parse(localStorage.getItem(key) || '{}');
-}
-
-// ── Palpitar tab ──────────────────────────────────────────────────
-function initPalpitar(data) {
-  const btnCarregar = document.getElementById('btn-carregar');
-  const btnSalvar = document.getElementById('btn-salvar-palpites');
-
-  btnCarregar.addEventListener('click', () => {
-    const nome = document.getElementById('input-nome').value.trim();
-    if (!nome) { alert('Digite seu nome primeiro.'); return; }
-    renderPalpitarForm(nome, data);
-  });
-
-  btnSalvar.addEventListener('click', () => {
-    const nome = document.getElementById('input-nome').value.trim();
-    if (!nome) return;
-    coletarESalvarPalpites(nome, data);
-    alert('Palpites salvos! Avise o admin para registrar no sistema.');
-  });
-}
-
-function renderPalpitarForm(nome, data) {
-  const form = document.getElementById('palpitar-form');
-  const btnSalvar = document.getElementById('btn-salvar-palpites');
-  const rodadaAtual = data.config.rodada_atual;
-  const rodadaData = data.rodadas[rodadaAtual];
-
-  if (!rodadaData || rodadaData.status === 'nao_iniciada') {
-    form.innerHTML = `<div class="rodada-fechada-aviso">Nenhuma rodada aberta no momento. Aguarde o admin liberar a próxima rodada.</div>`;
-    btnSalvar.style.display = 'none';
-    return;
-  }
-
-  if (rodadaData.status === 'fechada' || rodadaData.status === 'concluida') {
-    form.innerHTML = `<div class="rodada-fechada-aviso">Rodada encerrada pelo admin. Não é mais possível alterar palpites.</div>`;
-    btnSalvar.style.display = 'none';
-    return;
-  }
-
-  const palpitesLocal = carregarPalpitesLocal(nome);
-  const palpitesRodada = palpitesLocal[rodadaAtual] || {};
-  const jogos = rodadaData.jogos;
-
-  if (!jogos || jogos.length === 0) {
-    form.innerHTML = `<p style="color:#8fa8c0">Aguardando o admin preencher os times da rodada.</p>`;
-    btnSalvar.style.display = 'none';
-    return;
-  }
-
-  form.innerHTML = `<div class="palpite-list">${jogos.map(jogo => {
-    const p = palpitesRodada[jogo.id] || {};
-    return `
-      <div class="palpite-card" data-jogo-id="${jogo.id}">
-        <h3>${jogo.id}: ${jogo.mandante} x ${jogo.visitante}</h3>
-        <div class="placar-row">
-          <span class="team-name">${jogo.mandante}</span>
-          <input class="placar-input" type="number" min="0" max="20" data-campo="placar_mandante"
-            value="${p.placar_mandante ?? ''}" placeholder="0">
-          <span style="color:#8fa8c0">x</span>
-          <input class="placar-input" type="number" min="0" max="20" data-campo="placar_visitante"
-            value="${p.placar_visitante ?? ''}" placeholder="0">
-          <span class="team-name right">${jogo.visitante}</span>
-        </div>
-        <div class="passou-row">
-          <label>Quem avança:</label>
-          <select class="passou-select" data-campo="passou">
-            <option value="">-- selecione --</option>
-            <option value="${jogo.mandante}" ${p.passou === jogo.mandante ? 'selected' : ''}>${jogo.mandante}</option>
-            <option value="${jogo.visitante}" ${p.passou === jogo.visitante ? 'selected' : ''}>${jogo.visitante}</option>
-          </select>
-        </div>
-      </div>`;
-  }).join('')}</div>`;
-
-  btnSalvar.style.display = 'inline-block';
-}
-
-function coletarESalvarPalpites(nome, data) {
-  const rodadaAtual = data.config.rodada_atual;
-  document.querySelectorAll('.palpite-card').forEach(card => {
-    const jogoId = card.dataset.jogoId;
-    const placar_mandante = Number(card.querySelector('[data-campo="placar_mandante"]').value);
-    const placar_visitante = Number(card.querySelector('[data-campo="placar_visitante"]').value);
-    const passou = card.querySelector('[data-campo="passou"]').value;
-    salvarPalpiteLocal(nome, rodadaAtual, jogoId, { placar_mandante, placar_visitante, passou });
-  });
-}
-
 // ── Classificação ──────────────────────────────────────────────────
-function renderClassificacao(data) {
+function renderClassificacao(pontuacao, participantes) {
   const tbody = document.getElementById('classificacao-body');
-  const participantes = data.participantes || [];
-
-  if (participantes.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="8" style="color:#8fa8c0;text-align:center">Nenhum participante cadastrado ainda.</td></tr>`;
+  if (!participantes.length) {
+    tbody.innerHTML = `<tr><td colspan="8" style="color:#8fa8c0;text-align:center">Nenhum participante ainda.</td></tr>`;
     return;
   }
-
-  const pontuacao = data.pontuacao || {};
-  const sorted = [...participantes].sort((a, b) =>
-    (pontuacao[b]?.total ?? 0) - (pontuacao[a]?.total ?? 0)
-  );
-
+  const sorted = [...participantes].sort((a, b) => (pontuacao[b]?.total ?? 0) - (pontuacao[a]?.total ?? 0));
   tbody.innerHTML = sorted.map((nome, idx) => {
-    const p = pontuacao[nome] || { dezesseis_avos: 0, oitavas: 0, quartas: 0, semi: 0, final: 0, total: 0 };
+    const p   = pontuacao[nome] || { dezesseis_avos: 0, oitavas: 0, quartas: 0, semi: 0, final: 0, total: 0 };
     const pos = idx + 1;
     const badgeHtml = pos <= 3
       ? `<span class="pos-badge pos-${pos}">${pos}</span>`
       : `<span style="color:#8fa8c0">${pos}</span>`;
     return `<tr>
-      <td>${badgeHtml}</td>
-      <td>${nome}</td>
-      <td>${p.dezesseis_avos}</td>
-      <td>${p.oitavas}</td>
-      <td>${p.quartas}</td>
-      <td>${p.semi}</td>
-      <td>${p.final}</td>
+      <td>${badgeHtml}</td><td>${nome}</td>
+      <td>${p.dezesseis_avos}</td><td>${p.oitavas}</td><td>${p.quartas}</td>
+      <td>${p.semi}</td><td>${p.final}</td>
       <td class="total-cell">${p.total}</td>
     </tr>`;
   }).join('');
 }
 
-// ── Init ──────────────────────────────────────────────────────────
-async function init() {
-  initTabs();
+// ── Init principal ────────────────────────────────────────────────
+async function carregarEInicializar(user) {
   try {
-    const data = await carregarDados();
-    renderBracket(data);
-    initPalpitar(data);
-    renderClassificacao(data);
+    const [dados, participantes, pontuacao] = await Promise.all([
+      carregarDados(),
+      carregarTodosParticipantes(),
+      carregarPontuacao()
+    ]);
+    renderBracket(dados);
+    renderClassificacao(pontuacao, participantes);
+    // initPalpitar e initPalpitesTab são adicionadas nos Tasks 4 e 5;
+    // o try/catch silencia o ReferenceError durante a execução parcial do plano.
+    try { await initPalpitar(user, dados); } catch {}
+    try { initPalpitesTab(user, dados, participantes); } catch {}
   } catch (e) {
     document.getElementById('bracket-container').innerHTML =
       `<p style="color:#ff6b6b">Erro ao carregar dados: ${e.message}</p>`;
   }
+}
+
+// ── Entry point ───────────────────────────────────────────────────
+async function init() {
+  document.getElementById('landing-btn').addEventListener('click', handleLogin);
+  document.getElementById('landing-senha').addEventListener('keydown', e => {
+    if (e.key === 'Enter') handleLogin();
+  });
+  document.getElementById('btn-logout').addEventListener('click', handleLogout);
+
+  const session = getSession();
+  if (session) mostrarApp(session);
 }
 
 init();
