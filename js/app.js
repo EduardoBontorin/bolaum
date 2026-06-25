@@ -326,7 +326,7 @@ function renderPorJogo(jogo, todosOsPalpites, participantes, rodadaAtual, rodada
     const acertouPlacar = jogo.resultado &&
       Number(palpite.placar_mandante) === Number(jogo.placar_mandante) &&
       Number(palpite.placar_visitante) === Number(jogo.placar_visitante);
-    const classPts = acertouPassou ? (acertouPlacar ? 'acertou' : '') : 'errou';
+    const classPts = acertouPassou ? (acertouPlacar ? 'acertou' : '') : (jogo.resultado ? 'errou' : '');
     return `<tr>
       <td>${nome}</td>
       <td class="${classPts}">${placar}</td>
