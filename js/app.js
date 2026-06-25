@@ -311,6 +311,133 @@ async function initPalpitar(user, dados) {
   });
 }
 
+// ── Aba Palpites ──────────────────────────────────────────────────
+function renderPorJogo(jogo, todosOsPalpites, participantes, rodadaAtual, rodadaAberta, session, container) {
+  const rows = participantes.map(nome => {
+    const palpite = todosOsPalpites[nome]?.[rodadaAtual]?.[jogo.id];
+    const visivel = !rodadaAberta || session.isAdmin || nome === session.nome;
+
+    if (!palpite || !visivel) {
+      return `<tr><td>${nome}</td><td style="color:#4a6a8a">—</td><td style="color:#4a6a8a">—</td></tr>`;
+    }
+    const placar = `${palpite.placar_mandante ?? '?'} x ${palpite.placar_visitante ?? '?'}`;
+    const passou = palpite.passou || '—';
+    const acertouPassou = jogo.resultado && palpite.passou === jogo.resultado;
+    const acertouPlacar = jogo.resultado &&
+      Number(palpite.placar_mandante) === Number(jogo.placar_mandante) &&
+      Number(palpite.placar_visitante) === Number(jogo.placar_visitante);
+    const classPts = acertouPassou ? (acertouPlacar ? 'acertou' : '') : 'errou';
+    return `<tr>
+      <td>${nome}</td>
+      <td class="${classPts}">${placar}</td>
+      <td class="${acertouPassou ? 'acertou' : jogo.resultado ? 'errou' : ''}">${passou}</td>
+    </tr>`;
+  }).join('');
+
+  container.innerHTML = `
+    <table class="palpites-table">
+      <thead><tr><th>Participante</th><th>Placar palpitado</th><th>Quem avança</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function renderPorParticipante(nomeAlvo, jogos, todosOsPalpites, rodadaAtual, rodadaAberta, session, container) {
+  const podeMostrar = !rodadaAberta || session.isAdmin || nomeAlvo === session.nome;
+  if (!podeMostrar) {
+    container.innerHTML = `<div class="rodada-fechada-aviso">Palpites de outros participantes ficam visíveis após a rodada fechar.</div>`;
+    return;
+  }
+  const rows = jogos.map(jogo => {
+    const palpite = todosOsPalpites[nomeAlvo]?.[rodadaAtual]?.[jogo.id];
+    if (!palpite) return `<tr><td>${jogo.mandante} x ${jogo.visitante}</td><td style="color:#4a6a8a">—</td><td style="color:#4a6a8a">—</td></tr>`;
+    const placar = `${palpite.placar_mandante ?? '?'} x ${palpite.placar_visitante ?? '?'}`;
+    const acertouPassou = jogo.resultado && palpite.passou === jogo.resultado;
+    const acertouPlacar = jogo.resultado &&
+      Number(palpite.placar_mandante) === Number(jogo.placar_mandante) &&
+      Number(palpite.placar_visitante) === Number(jogo.placar_visitante);
+    const classPts = acertouPassou ? (acertouPlacar ? 'acertou' : '') : (jogo.resultado ? 'errou' : '');
+    return `<tr>
+      <td>${jogo.mandante} x ${jogo.visitante}</td>
+      <td class="${classPts}">${placar}</td>
+      <td class="${acertouPassou ? 'acertou' : jogo.resultado ? 'errou' : ''}">${palpite.passou || '—'}</td>
+    </tr>`;
+  }).join('');
+  container.innerHTML = `
+    <table class="palpites-table">
+      <thead><tr><th>Jogo</th><th>Placar palpitado</th><th>Quem avança</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+async function initPalpitesTab(user, dados, participantes) {
+  const rodadaAtual  = dados.config.rodada_atual;
+  const rodadaData   = dados.rodadas[rodadaAtual];
+  const jogos        = rodadaData?.jogos || [];
+  const rodadaAberta = rodadaData?.status === 'aberta';
+
+  // Carregamento lazy: carrega na primeira vez que a aba é aberta
+  let todosOsPalpites = null;
+  document.querySelector('[data-tab="palpites"]').addEventListener('click', async () => {
+    if (todosOsPalpites) return;
+    todosOsPalpites = await carregarTodosPalpites();
+    renderPalpitesContent(modoAtual);
+  });
+
+  let modoAtual = 'jogo';
+  const controls = document.querySelector('.palpites-tab-controls');
+
+  function renderPalpitesContent(modo) {
+    if (!todosOsPalpites) {
+      document.getElementById('palpites-content').innerHTML = `<p style="color:#8fa8c0">Carregando palpites...</p>`;
+      return;
+    }
+    const selectContainer = document.getElementById('palpites-select-container');
+    const content = document.getElementById('palpites-content');
+
+    if (modo === 'jogo') {
+      selectContainer.innerHTML = jogos.length
+        ? `<label style="font-size:0.85rem;color:#8fa8c0;margin-right:0.5rem">Jogo:</label>
+           <select class="select-field" id="select-jogo-palpites">
+             <option value="">-- selecione --</option>
+             ${jogos.map(j => `<option value="${j.id}">${j.id}: ${j.mandante} x ${j.visitante}</option>`).join('')}
+           </select>`
+        : `<p style="color:#8fa8c0">Nenhum jogo na rodada atual.</p>`;
+      content.innerHTML = '';
+      if (jogos.length) {
+        document.getElementById('select-jogo-palpites').addEventListener('change', e => {
+          if (!e.target.value) { content.innerHTML = ''; return; }
+          const jogo = jogos.find(j => j.id === e.target.value);
+          renderPorJogo(jogo, todosOsPalpites, participantes, rodadaAtual, rodadaAberta, user, content);
+        });
+      }
+    } else {
+      selectContainer.innerHTML = participantes.length
+        ? `<label style="font-size:0.85rem;color:#8fa8c0;margin-right:0.5rem">Participante:</label>
+           <select class="select-field" id="select-participante-palpites">
+             <option value="">-- selecione --</option>
+             ${participantes.map(n => `<option value="${n}">${n}</option>`).join('')}
+           </select>`
+        : `<p style="color:#8fa8c0">Nenhum participante cadastrado.</p>`;
+      content.innerHTML = '';
+      if (participantes.length) {
+        document.getElementById('select-participante-palpites').addEventListener('change', e => {
+          if (!e.target.value) { content.innerHTML = ''; return; }
+          renderPorParticipante(e.target.value, jogos, todosOsPalpites, rodadaAtual, rodadaAberta, user, content);
+        });
+      }
+    }
+  }
+
+  controls.querySelectorAll('.palpites-mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      controls.querySelectorAll('.palpites-mode-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      modoAtual = btn.dataset.mode;
+      renderPalpitesContent(modoAtual);
+    });
+  });
+}
+
 // ── Entry point ───────────────────────────────────────────────────
 async function init() {
   document.getElementById('landing-btn').addEventListener('click', handleLogin);
