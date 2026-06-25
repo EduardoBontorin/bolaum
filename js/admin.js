@@ -90,6 +90,135 @@ async function seedSeNecessario() {
   ));
 }
 
+// ── Rodada ────────────────────────────────────────────────────────
+async function renderRodadaAdmin() {
+  const configSnap = await getDoc(doc(db, 'config', 'app'));
+  const config     = configSnap.exists() ? configSnap.data() : { rodada_atual: 'dezesseis_avos' };
+  const rodadaAtual = config.rodada_atual;
+  const rodadaSnap  = await getDoc(doc(db, 'rodadas', rodadaAtual));
+  const rodadaData  = rodadaSnap.exists()
+    ? rodadaSnap.data()
+    : { status: 'nao_iniciada', jogos: [], horario_abertura: null };
+  const status      = rodadaData.status;
+  const estrutura   = BRACKET_ESTRUTURA[rodadaAtual];
+
+  const instrucoes = {
+    nao_iniciada: 'Preencha os times, salve e clique <strong>Abrir rodada</strong>.',
+    aberta:       'Rodada aberta — participantes podem palpitar. Clique <strong>Fechar rodada</strong> quando os jogos começarem.',
+    fechada:      'Rodada fechada. Vá em <strong>Resultados</strong> para inserir placares e calcular pontos.',
+    concluida:    'Pontos calculados. Preencha os times da próxima fase e clique <strong>Abrir próxima rodada</strong>.'
+  };
+
+  document.getElementById('rodada-status-painel').innerHTML = `
+    <div class="alert alert-info">
+      <div>Rodada atual: <strong>${RODADA_LABELS[rodadaAtual]}</strong>
+        &nbsp;<span class="status-badge status-${status}">${status.replace('_', ' ')}</span></div>
+      <div style="margin-top:0.5rem;font-size:0.85rem">${instrucoes[status] || ''}</div>
+    </div>`;
+
+  // Preencher horario_abertura
+  if (rodadaData.horario_abertura) {
+    const dt = new Date(rodadaData.horario_abertura);
+    const local = new Date(dt.getTime() - dt.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    document.getElementById('input-horario-abertura').value = local;
+  } else {
+    document.getElementById('input-horario-abertura').value = '';
+  }
+
+  document.getElementById('btn-salvar-horario').onclick = async () => {
+    const val = document.getElementById('input-horario-abertura').value;
+    const iso = val ? new Date(val).toISOString() : null;
+    await setDoc(doc(db, 'rodadas', rodadaAtual), { ...rodadaData, horario_abertura: iso });
+    alert('Horário salvo.');
+  };
+
+  // Times form
+  const form = document.getElementById('rodada-times-form');
+  if (status === 'fechada') {
+    form.innerHTML = `<p style="color:#8fa8c0;font-size:0.9rem">Insira os resultados em <strong style="color:#f5a623">Resultados</strong>.</p>`;
+  } else {
+    const jogosExistentes = Object.fromEntries((rodadaData.jogos || []).map(j => [j.id, j]));
+    form.innerHTML = estrutura.map(slot => {
+      const jogo   = jogosExistentes[slot.id] || {};
+      const labelM = slot.label_mandante  || `Vencedor de ${slot.origem_mandante}`;
+      const labelV = slot.label_visitante || `Vencedor de ${slot.origem_visitante}`;
+      return `
+        <div class="admin-jogo-card" data-slot-id="${slot.id}">
+          <h4>${slot.id} &nbsp;|&nbsp; <em>${labelM}</em> vs <em>${labelV}</em></h4>
+          <div class="placar-row">
+            <input class="input-text" type="text" data-campo="mandante"
+              placeholder="${labelM}" value="${jogo.mandante || ''}" style="min-width:0;flex:1">
+            <span style="color:#8fa8c0;padding:0 0.5rem">x</span>
+            <input class="input-text" type="text" data-campo="visitante"
+              placeholder="${labelV}" value="${jogo.visitante || ''}" style="min-width:0;flex:1">
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  // Botões
+  const btnSalvarTimes  = document.getElementById('btn-salvar-times');
+  const btnAbrir        = document.getElementById('btn-abrir-rodada');
+  const btnFechar       = document.getElementById('btn-fechar-rodada');
+  const btnProxima      = document.getElementById('btn-abrir-proxima');
+
+  btnSalvarTimes.style.display = (status === 'nao_iniciada' || status === 'aberta') ? '' : 'none';
+  btnAbrir.style.display       = status === 'nao_iniciada' ? '' : 'none';
+  btnFechar.style.display      = status === 'aberta'       ? '' : 'none';
+  btnProxima.style.display     = (status === 'concluida' || status === 'fechada') ? '' : 'none';
+
+  btnSalvarTimes.onclick = async () => {
+    const novosJogos = [];
+    const atual = Object.fromEntries((rodadaData.jogos || []).map(j => [j.id, j]));
+    document.querySelectorAll('#rodada-times-form .admin-jogo-card').forEach(card => {
+      const id        = card.dataset.slotId;
+      const mandante  = card.querySelector('[data-campo="mandante"]').value.trim();
+      const visitante = card.querySelector('[data-campo="visitante"]').value.trim();
+      novosJogos.push({
+        id, mandante, visitante,
+        placar_mandante:  atual[id]?.placar_mandante  ?? null,
+        placar_visitante: atual[id]?.placar_visitante ?? null,
+        resultado:        atual[id]?.resultado        ?? null,
+        penaltis:         atual[id]?.penaltis         ?? false
+      });
+    });
+    await setDoc(doc(db, 'rodadas', rodadaAtual), { ...rodadaData, jogos: novosJogos });
+    alert('Times salvos!');
+    renderRodadaAdmin();
+  };
+
+  btnAbrir.onclick = async () => {
+    if (!confirm(`Abrir "${RODADA_LABELS[rodadaAtual]}" para palpites?`)) return;
+    await setDoc(doc(db, 'rodadas', rodadaAtual), { ...rodadaData, status: 'aberta' });
+    renderRodadaAdmin();
+  };
+
+  btnFechar.onclick = async () => {
+    if (!confirm(`Fechar "${RODADA_LABELS[rodadaAtual]}"?`)) return;
+    await setDoc(doc(db, 'rodadas', rodadaAtual), { ...rodadaData, status: 'fechada' });
+    renderRodadaAdmin();
+  };
+
+  btnProxima.onclick = async () => {
+    const idx = RODADAS.indexOf(rodadaAtual);
+    if (idx === RODADAS.length - 1) { alert('Esta é a última rodada.'); return; }
+    if (status !== 'concluida') {
+      if (!confirm('Pontos ainda não calculados. Avançar mesmo assim?')) return;
+    }
+    const proxima = RODADAS[idx + 1];
+    const proximaSnap = await getDoc(doc(db, 'rodadas', proxima));
+    const proximaData = proximaSnap.exists()
+      ? proximaSnap.data()
+      : { status: 'nao_iniciada', jogos: [], horario_abertura: null };
+    await Promise.all([
+      setDoc(doc(db, 'config', 'app'), { rodada_atual: proxima }),
+      setDoc(doc(db, 'rodadas', proxima), { ...proximaData, status: 'aberta' })
+    ]);
+    alert(`"${RODADA_LABELS[proxima]}" aberta. Preencha os times.`);
+    renderRodadaAdmin();
+  };
+}
+
 // ── Init ──────────────────────────────────────────────────────────
 async function init() {
   await seedSeNecessario();
