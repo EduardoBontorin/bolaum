@@ -296,8 +296,12 @@ function renderBracket(data) {
         ? `<button class="btn-ver-palpites" data-jogo-id="${jogo.id}" data-rodada="${rodada}">Ver palpites</button>`
         : '';
 
+      const horarioStr = jogo?.horario_abertura
+        ? new Date(jogo.horario_abertura).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })
+        : '';
       wrapper.innerHTML = `
         <div class="bracket-match" style="flex:1">
+          ${horarioStr ? `<div class="bracket-match-horario">${horarioStr}</div>` : ''}
           ${renderTeamRow(mandante,  jogo?.placar_mandante,  temRes ? resultado === mandante  : null)}
           ${renderTeamRow(visitante, jogo?.placar_visitante, temRes ? resultado === visitante : null)}
           ${btnPalpites}
