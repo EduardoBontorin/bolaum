@@ -371,30 +371,34 @@ async function carregarEInicializar(user) {
 }
 
 // ── Palpitar ──────────────────────────────────────────────────────
-function isPalpitesBloqueado(rodadaData) {
-  if (!rodadaData.horario_abertura) return false;
-  const cutoff = new Date(rodadaData.horario_abertura).getTime() - 60 * 60 * 1000;
-  return Date.now() >= cutoff;
+function isJogoLocked(jogo) {
+  if (!jogo.horario_abertura) return false;
+  return Date.now() >= new Date(jogo.horario_abertura).getTime() - 60 * 60 * 1000;
 }
 
-function renderPalpiteCards(jogos, palpitesRodada, bloqueado) {
+function renderPalpiteCards(jogos, palpitesRodada) {
   const list = document.getElementById('palpite-list-inner');
   if (!list) return;
 
   list.innerHTML = jogos.map(jogo => {
-    const p          = palpitesRodada[jogo.id] || {};
-    const mVal       = p.placar_mandante ?? '';
-    const vVal       = p.placar_visitante ?? '';
-    const hasScores  = mVal !== '' && vVal !== '';
-    const isEmpate   = hasScores && Number(mVal) === Number(vVal);
+    const p           = palpitesRodada[jogo.id] || {};
+    const mVal        = p.placar_mandante ?? '';
+    const vVal        = p.placar_visitante ?? '';
+    const hasScores   = mVal !== '' && vVal !== '';
+    const isEmpate    = hasScores && Number(mVal) === Number(vVal);
     const isNaoEmpate = hasScores && Number(mVal) !== Number(vVal);
-    const autoWinner = isNaoEmpate ? (Number(mVal) > Number(vVal) ? jogo.mandante : jogo.visitante) : '';
-    const disabled   = bloqueado ? 'disabled' : '';
+    const autoWinner  = isNaoEmpate ? (Number(mVal) > Number(vVal) ? jogo.mandante : jogo.visitante) : '';
+    const locked      = isJogoLocked(jogo);
+    const disabled    = locked ? 'disabled' : '';
+    const horarioHtml = jogo.horario_abertura
+      ? `<div class="jogo-horario">${new Date(jogo.horario_abertura).toLocaleString('pt-BR')}${locked ? ' — <span style="color:#ff8a8a">encerrado</span>' : ''}</div>`
+      : '';
 
     return `
       <div class="palpite-card" data-jogo-id="${jogo.id}"
            data-mandante="${jogo.mandante}" data-visitante="${jogo.visitante}">
         <h3>${jogo.id}: ${jogo.mandante} x ${jogo.visitante}</h3>
+        ${horarioHtml}
         <div class="placar-row">
           <span class="team-name">${jogo.mandante}</span>
           <input class="placar-input" type="number" min="0" max="20"
@@ -420,40 +424,46 @@ function renderPalpiteCards(jogos, palpitesRodada, bloqueado) {
       </div>`;
   }).join('');
 
-  if (!bloqueado) {
-    list.querySelectorAll('.palpite-card').forEach(card => {
-      const mInput         = card.querySelector('[data-campo="placar_mandante"]');
-      const vInput         = card.querySelector('[data-campo="placar_visitante"]');
-      const passouAuto     = card.querySelector('.passou-auto');
-      const passouAutoNome = card.querySelector('.passou-auto-nome');
-      const passouWrap     = card.querySelector('.passou-select-wrap');
-      const passouSelect   = card.querySelector('.passou-select');
-      const mandante       = card.dataset.mandante;
-      const visitante      = card.dataset.visitante;
+  list.querySelectorAll('.palpite-card').forEach(card => {
+    if (card.querySelector('[data-campo="placar_mandante"]').disabled) return;
+    const mInput         = card.querySelector('[data-campo="placar_mandante"]');
+    const vInput         = card.querySelector('[data-campo="placar_visitante"]');
+    const passouAuto     = card.querySelector('.passou-auto');
+    const passouAutoNome = card.querySelector('.passou-auto-nome');
+    const passouWrap     = card.querySelector('.passou-select-wrap');
+    const passouSelect   = card.querySelector('.passou-select');
+    const mandante       = card.dataset.mandante;
+    const visitante      = card.dataset.visitante;
 
-      const update = () => {
-        const m = mInput.value, v = vInput.value;
-        const hasVal  = m !== '' && v !== '';
-        const empate  = hasVal && Number(m) === Number(v);
-        const nEmpate = hasVal && Number(m) !== Number(v);
-        passouWrap.style.display = empate  ? '' : 'none';
-        passouAuto.style.display = nEmpate ? '' : 'none';
-        if (nEmpate) passouAutoNome.textContent = Number(m) > Number(v) ? mandante : visitante;
-        if (!empate) passouSelect.value = '';
-      };
-      mInput.addEventListener('input', update);
-      vInput.addEventListener('input', update);
-    });
-  }
+    const update = () => {
+      const m = mInput.value, v = vInput.value;
+      const hasVal  = m !== '' && v !== '';
+      const empate  = hasVal && Number(m) === Number(v);
+      const nEmpate = hasVal && Number(m) !== Number(v);
+      passouWrap.style.display = empate  ? '' : 'none';
+      passouAuto.style.display = nEmpate ? '' : 'none';
+      if (nEmpate) passouAutoNome.textContent = Number(m) > Number(v) ? mandante : visitante;
+      if (!empate) passouSelect.value = '';
+    };
+    mInput.addEventListener('input', update);
+    vInput.addEventListener('input', update);
+  });
 }
 
 async function salvarPalpites(nome, rodadaAtual) {
-  const novosRodada = {};
+  const ref      = doc(db, 'palpites', nome);
+  const current  = await getDoc(ref);
+  const existing = current.exists() ? current.data() : {};
+
+  const novosRodada = { ...(existing[rodadaAtual] || {}) };
+
   document.querySelectorAll('.palpite-card').forEach(card => {
+    const mInput = card.querySelector('[data-campo="placar_mandante"]');
+    if (mInput.disabled) return; // jogo bloqueado — preserva palpite existente
     const jogoId    = card.dataset.jogoId;
     const mandante  = card.dataset.mandante;
     const visitante = card.dataset.visitante;
-    const pmStr     = card.querySelector('[data-campo="placar_mandante"]').value;
+    const pmStr     = mInput.value;
     const pvStr     = card.querySelector('[data-campo="placar_visitante"]').value;
     const placar_mandante  = Number(pmStr);
     const placar_visitante = Number(pvStr);
@@ -466,9 +476,6 @@ async function salvarPalpites(nome, rodadaAtual) {
     novosRodada[jogoId] = { placar_mandante, placar_visitante, passou };
   });
 
-  const ref      = doc(db, 'palpites', nome);
-  const current  = await getDoc(ref);
-  const existing = current.exists() ? current.data() : {};
   existing[rodadaAtual] = novosRodada;
   await setDoc(ref, existing);
 }
@@ -491,36 +498,23 @@ async function initPalpitar(user, dados) {
     return;
   }
 
-  const bloqueado = isPalpitesBloqueado(rodadaData);
-
-  let headerHtml = '';
-  if (rodadaData.horario_abertura) {
-    const dt = new Date(rodadaData.horario_abertura);
-    headerHtml = `<p class="rodada-horario">Início da rodada: <strong>${dt.toLocaleString('pt-BR')}</strong>${
-      bloqueado ? ' — <span style="color:#ff8a8a">palpites encerrados</span>' : ' — palpites fecham 1h antes'
-    }</p>`;
-  }
-
-  if (bloqueado) {
-    form.innerHTML  = headerHtml + `<div class="rodada-fechada-aviso">Palpites encerrados — jogos começam em breve.</div>`;
-    acoes.innerHTML = '';
-    return;
-  }
-
   const jogos = rodadaData.jogos || [];
   if (!jogos.length) {
-    form.innerHTML  = headerHtml + `<p style="color:#8fa8c0">Aguardando admin preencher os times.</p>`;
+    form.innerHTML  = `<p style="color:#8fa8c0">Aguardando admin preencher os times.</p>`;
     acoes.innerHTML = '';
     return;
   }
 
   const palpitesUsuario = await carregarPalpitesUsuario(user.nome);
   const palpitesRodada  = palpitesUsuario[rodadaAtual] || {};
+  const todosLocked     = jogos.every(isJogoLocked);
 
-  form.innerHTML  = headerHtml + `<div class="palpite-list"><div id="palpite-list-inner"></div></div>`;
-  acoes.innerHTML = `<button class="btn btn-primary" id="btn-salvar-palpites">Salvar palpites</button>`;
+  form.innerHTML  = `<div class="palpite-list"><div id="palpite-list-inner"></div></div>`;
+  acoes.innerHTML = todosLocked
+    ? `<p class="rodada-horario" style="color:#ff8a8a">Todos os jogos já começaram — palpites encerrados.</p>`
+    : `<button class="btn btn-primary" id="btn-salvar-palpites">Salvar palpites</button>`;
 
-  renderPalpiteCards(jogos, palpitesRodada, false);
+  renderPalpiteCards(jogos, palpitesRodada);
 
   document.getElementById('btn-salvar-palpites').addEventListener('click', async () => {
     const btn = document.getElementById('btn-salvar-palpites');

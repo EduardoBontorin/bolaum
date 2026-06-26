@@ -116,22 +116,6 @@ async function renderRodadaAdmin() {
       <div style="margin-top:0.5rem;font-size:0.85rem">${instrucoes[status] || ''}</div>
     </div>`;
 
-  // Preencher horario_abertura
-  if (rodadaData.horario_abertura) {
-    const dt = new Date(rodadaData.horario_abertura);
-    const local = new Date(dt.getTime() - dt.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-    document.getElementById('input-horario-abertura').value = local;
-  } else {
-    document.getElementById('input-horario-abertura').value = '';
-  }
-
-  document.getElementById('btn-salvar-horario').onclick = async () => {
-    const val = document.getElementById('input-horario-abertura').value;
-    const iso = val ? new Date(val).toISOString() : null;
-    await setDoc(doc(db, 'rodadas', rodadaAtual), { ...rodadaData, horario_abertura: iso });
-    alert('Horário salvo.');
-  };
-
   // Times form
   const form = document.getElementById('rodada-times-form');
   if (status === 'fechada') {
@@ -142,6 +126,9 @@ async function renderRodadaAdmin() {
       const jogo   = jogosExistentes[slot.id] || {};
       const labelM = slot.label_mandante  || `Vencedor de ${slot.origem_mandante}`;
       const labelV = slot.label_visitante || `Vencedor de ${slot.origem_visitante}`;
+      const horarioVal = jogo.horario_abertura
+        ? (() => { const d = new Date(jogo.horario_abertura); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); })()
+        : '';
       return `
         <div class="admin-jogo-card" data-slot-id="${slot.id}">
           <h4>${slot.id} &nbsp;|&nbsp; <em>${labelM}</em> vs <em>${labelV}</em></h4>
@@ -151,6 +138,11 @@ async function renderRodadaAdmin() {
             <span style="color:#8fa8c0;padding:0 0.5rem">x</span>
             <input class="input-text" type="text" data-campo="visitante"
               placeholder="${labelV}" value="${jogo.visitante || ''}" style="min-width:0;flex:1">
+          </div>
+          <div style="margin-top:0.5rem;display:flex;align-items:center;gap:0.5rem">
+            <label style="font-size:0.8rem;color:#8fa8c0;white-space:nowrap">Horário do jogo:</label>
+            <input type="datetime-local" data-campo="horario_abertura" class="input-text"
+              value="${horarioVal}" style="flex:1">
           </div>
         </div>`;
     }).join('');
@@ -171,11 +163,14 @@ async function renderRodadaAdmin() {
     const novosJogos = [];
     const atual = Object.fromEntries((rodadaData.jogos || []).map(j => [j.id, j]));
     document.querySelectorAll('#rodada-times-form .admin-jogo-card').forEach(card => {
-      const id        = card.dataset.slotId;
-      const mandante  = card.querySelector('[data-campo="mandante"]').value.trim();
-      const visitante = card.querySelector('[data-campo="visitante"]').value.trim();
+      const id          = card.dataset.slotId;
+      const mandante    = card.querySelector('[data-campo="mandante"]').value.trim();
+      const visitante   = card.querySelector('[data-campo="visitante"]').value.trim();
+      const horarioVal  = card.querySelector('[data-campo="horario_abertura"]').value;
+      const horario     = horarioVal ? new Date(horarioVal).toISOString() : null;
       novosJogos.push({
         id, mandante, visitante,
+        horario_abertura: horario,
         placar_mandante:  atual[id]?.placar_mandante  ?? null,
         placar_visitante: atual[id]?.placar_visitante ?? null,
         resultado:        atual[id]?.resultado        ?? null,

@@ -437,6 +437,12 @@ a { color: inherit; text-decoration: none; }
 }
 
 /* ── Palpitar: horário da rodada ── */
+.jogo-horario {
+  font-size: 0.78rem;
+  color: #8fa8c0;
+  margin-bottom: 0.4rem;
+}
+
 .rodada-horario {
   font-size: 0.85rem;
   color: #8fa8c0;
