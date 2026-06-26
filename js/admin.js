@@ -346,11 +346,39 @@ async function renderResultadosAdmin() {
   };
 }
 
+// ── Zerar Campeonato ──────────────────────────────────────────────
+function initZerarCampeonato() {
+  document.getElementById('btn-zerar-campeonato').addEventListener('click', async () => {
+    if (!confirm('Tem certeza? Isso apagará TODOS os palpites, pontuações e rodadas. Os usuários serão mantidos.')) return;
+    if (!confirm('Confirme novamente: zerar o campeonato é irreversível.')) return;
+
+    const usuariosSnap = await getDocs(collection(db, 'usuarios'));
+    const todos = usuariosSnap.docs.map(d => d.id);
+
+    await Promise.all([
+      setDoc(doc(db, 'config', 'app'), { rodada_atual: 'dezesseis_avos' }),
+      ...RODADAS.map(r =>
+        setDoc(doc(db, 'rodadas', r), { status: 'nao_iniciada', jogos: [], horario_abertura: null })
+      ),
+      ...todos.map(nome =>
+        Promise.all([
+          setDoc(doc(db, 'palpites',  nome), {}),
+          setDoc(doc(db, 'pontuacao', nome), { dezesseis_avos: 0, oitavas: 0, quartas: 0, semi: 0, final: 0, total: 0 })
+        ])
+      )
+    ]);
+
+    alert('Campeonato zerado. Rodadas, palpites e pontuações foram resetados.');
+    renderUsuarios();
+  });
+}
+
 // ── Init ──────────────────────────────────────────────────────────
 async function init() {
   await seedSeNecessario();
   initNav();
   initUsuarios();
+  initZerarCampeonato();
   renderUsuarios();
 }
 

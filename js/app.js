@@ -101,7 +101,7 @@ async function carregarTodosPalpites() {
 
 async function carregarTodosParticipantes() {
   const snap = await getDocs(collection(db, 'usuarios'));
-  return snap.docs.map(d => d.id).sort();
+  return snap.docs.filter(d => !d.data().isAdmin).map(d => d.id).sort();
 }
 
 async function carregarPontuacao() {
