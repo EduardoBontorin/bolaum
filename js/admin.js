@@ -261,46 +261,53 @@ async function renderResultadosAdmin() {
               data-campo="placar_visitante" value="${pvVal}">
             <span class="team-name right">${jogo.visitante}</span>
           </div>
-          <div class="passou-row" style="margin-top:0.6rem">
-            <label style="font-size:0.85rem;color:#8fa8c0">Quem avançou:</label>
+          <div class="passou-row resultado-row" style="margin-top:0.6rem;${foiEmpate ? '' : 'display:none'}">
+            <label style="font-size:0.85rem;color:#f5a623">Quem avançou nos pênaltis:</label>
             <select class="passou-select" data-campo="resultado">
               <option value="">-- selecione --</option>
               <option value="${jogo.mandante}" ${jogo.resultado === jogo.mandante ? 'selected' : ''}>${jogo.mandante}</option>
               <option value="${jogo.visitante}" ${jogo.resultado === jogo.visitante ? 'selected' : ''}>${jogo.visitante}</option>
             </select>
           </div>
-          <div class="passou-row penaltis-resultado-row" style="margin-top:0.4rem;${foiEmpate ? '' : 'display:none'}">
-            <label style="font-size:0.85rem;color:#f5a623">
-              <input type="checkbox" data-campo="penaltis" ${jogo.penaltis ? 'checked' : ''}> Decisão nos pênaltis
-            </label>
-          </div>
         </div>`;
     }).join('');
 
   // Mostrar/ocultar checkbox pênaltis conforme placar
   form.querySelectorAll('.admin-jogo-card').forEach(card => {
-    const mInput = card.querySelector('[data-campo="placar_mandante"]');
-    const vInput = card.querySelector('[data-campo="placar_visitante"]');
-    const penRow = card.querySelector('.penaltis-resultado-row');
-    const togglePen = () => {
+    const mInput       = card.querySelector('[data-campo="placar_mandante"]');
+    const vInput       = card.querySelector('[data-campo="placar_visitante"]');
+    const resultadoRow = card.querySelector('.resultado-row');
+    const toggle = () => {
       const m = mInput.value, v = vInput.value;
-      penRow.style.display = (m !== '' && v !== '' && Number(m) === Number(v)) ? '' : 'none';
+      const empate = m !== '' && v !== '' && Number(m) === Number(v);
+      resultadoRow.style.display = empate ? '' : 'none';
+      if (!empate) card.querySelector('[data-campo="resultado"]').value = '';
     };
-    mInput.addEventListener('input', togglePen);
-    vInput.addEventListener('input', togglePen);
+    mInput.addEventListener('input', toggle);
+    vInput.addEventListener('input', toggle);
   });
 
   document.getElementById('btn-salvar-resultados').onclick = async () => {
     const novosJogos = rodadaData.jogos.map(jogo => {
       const card = form.querySelector(`.admin-jogo-card[data-jogo-id="${jogo.id}"]`);
       if (!card) return jogo;
-      return {
-        ...jogo,
-        placar_mandante:  Number(card.querySelector('[data-campo="placar_mandante"]').value),
-        placar_visitante: Number(card.querySelector('[data-campo="placar_visitante"]').value),
-        resultado:        card.querySelector('[data-campo="resultado"]').value || null,
-        penaltis:         card.querySelector('[data-campo="penaltis"]')?.checked ?? false
-      };
+      const pmStr = card.querySelector('[data-campo="placar_mandante"]').value;
+      const pvStr = card.querySelector('[data-campo="placar_visitante"]').value;
+      const pm    = Number(pmStr);
+      const pv    = Number(pvStr);
+      const temPlacar = pmStr !== '' && pvStr !== '';
+      const isEmpate  = temPlacar && pm === pv;
+
+      let resultado;
+      if (!temPlacar) {
+        resultado = jogo.resultado ?? null;
+      } else if (isEmpate) {
+        resultado = card.querySelector('[data-campo="resultado"]').value || null;
+      } else {
+        resultado = pm > pv ? jogo.mandante : jogo.visitante;
+      }
+
+      return { ...jogo, placar_mandante: pm, placar_visitante: pv, resultado };
     });
     await setDoc(doc(db, 'rodadas', rodadaAtual), { ...rodadaData, jogos: novosJogos });
     alert('Resultados salvos. Clique "Calcular pontos" quando todos os jogos tiverem resultado.');

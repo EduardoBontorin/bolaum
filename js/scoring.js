@@ -1,14 +1,18 @@
-/**
- * Returns points for a single guess vs a single completed match.
- * palpite: { placar_mandante, placar_visitante, passou }
- * jogo:    { placar_mandante, placar_visitante, resultado }
- * Returns null if match not yet completed.
- */
+function derivarResultado(jogo) {
+  if (jogo.resultado) return jogo.resultado;
+  const pm = jogo.placar_mandante, pv = jogo.placar_visitante;
+  if (pm === null || pm === undefined || pv === null || pv === undefined) return null;
+  const nm = Number(pm), nv = Number(pv);
+  if (nm === nv) return null;
+  return nm > nv ? jogo.mandante : jogo.visitante;
+}
+
 export function calcularPonto(palpite, jogo) {
-  if (jogo.resultado === null || jogo.resultado === undefined) return null;
+  const resultado = derivarResultado(jogo);
+  if (resultado === null || resultado === undefined) return null;
   if (!palpite) return 0;
 
-  const acertouPassou = palpite.passou === jogo.resultado;
+  const acertouPassou = palpite.passou === resultado;
   if (!acertouPassou) return 0;
 
   const acertouPlacar =
@@ -18,10 +22,6 @@ export function calcularPonto(palpite, jogo) {
   return acertouPlacar ? 2 : 1;
 }
 
-/**
- * Recalculates all participants' scores from scratch.
- * Returns a new pontuacao object.
- */
 export function calcularTodosPontos(data) {
   const RODADAS = ['dezesseis_avos', 'oitavas', 'quartas', 'semi', 'final'];
   const pontuacao = {};

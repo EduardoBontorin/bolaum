@@ -3,6 +3,16 @@ import { db, doc, getDoc, setDoc, getDocs, collection } from './firebase.js';
 import { getSession, saveSession, clearSession } from './auth.js';
 import { calcularPonto } from './scoring.js';
 
+// ── Helper: resultado efetivo (infere do placar quando resultado é null) ──
+function resultadoEfetivo(jogo) {
+  if (jogo.resultado) return jogo.resultado;
+  const pm = jogo.placar_mandante, pv = jogo.placar_visitante;
+  if (pm === null || pm === undefined || pv === null || pv === undefined) return null;
+  const nm = Number(pm), nv = Number(pv);
+  if (nm === nv) return null;
+  return nm > nv ? jogo.mandante : jogo.visitante;
+}
+
 // ── Estado global da sessão ───────────────────────────────────────
 let globalDados          = null;
 let globalTodosPalpites  = null;
@@ -115,9 +125,10 @@ function fecharModal() {
 
 // ── Modal: palpites de uma partida ────────────────────────────────
 function abrirModalPalpitesJogo(jogo, rodada) {
-  const participantes    = globalParticipantes || [];
-  const todosOsPalpites  = globalTodosPalpites || {};
-  const temResultado     = jogo.resultado !== null && jogo.resultado !== undefined;
+  const participantes   = globalParticipantes || [];
+  const todosOsPalpites = globalTodosPalpites || {};
+  const res             = resultadoEfetivo(jogo);
+  const temResultado    = res !== null;
 
   let headerHtml = '';
   if (temResultado) {
@@ -125,7 +136,7 @@ function abrirModalPalpitesJogo(jogo, rodada) {
       <div class="modal-placar">
         <div class="mp-times">${jogo.mandante} × ${jogo.visitante}</div>
         <div class="mp-score">${jogo.placar_mandante} – ${jogo.placar_visitante}</div>
-        <div class="mp-passou">Avançou: <strong>${jogo.resultado}</strong></div>
+        <div class="mp-passou">Avançou: <strong>${res}</strong></div>
       </div>`;
   }
 
@@ -139,16 +150,16 @@ function abrirModalPalpitesJogo(jogo, rodada) {
         <td><span class="pts-badge pts-null">—</span></td>
       </tr>`;
     }
-    const placarP      = `${palpite.placar_mandante ?? '?'} x ${palpite.placar_visitante ?? '?'}`;
-    const pts          = temResultado ? calcularPonto(palpite, jogo) : null;
-    const ptsClass     = pts === 2 ? 'pts-2' : pts === 1 ? 'pts-1' : pts === 0 ? 'pts-0' : 'pts-null';
-    const ptsLabel     = pts === null ? '—' : `${pts} pt${pts !== 1 ? 's' : ''}`;
-    const acertouPassou = temResultado && palpite.passou === jogo.resultado;
+    const placarP       = `${palpite.placar_mandante ?? '?'} x ${palpite.placar_visitante ?? '?'}`;
+    const pts           = temResultado ? calcularPonto(palpite, jogo) : null;
+    const ptsClass      = pts === 2 ? 'pts-2' : pts === 1 ? 'pts-1' : pts === 0 ? 'pts-0' : 'pts-null';
+    const ptsLabel      = pts === null ? '—' : `${pts} pt${pts !== 1 ? 's' : ''}`;
+    const acertouPassou = temResultado && palpite.passou === res;
     const acertouPlacar = temResultado &&
       Number(palpite.placar_mandante) === Number(jogo.placar_mandante) &&
       Number(palpite.placar_visitante) === Number(jogo.placar_visitante);
-    const classPlacar  = acertouPlacar ? 'acertou' : (temResultado ? (acertouPassou ? '' : 'errou') : '');
-    const classPassou  = acertouPassou ? 'acertou' : (temResultado ? 'errou' : '');
+    const classPlacar   = acertouPlacar ? 'acertou' : (temResultado ? (acertouPassou ? '' : 'errou') : '');
+    const classPassou   = acertouPassou ? 'acertou' : (temResultado ? 'errou' : '');
 
     return `<tr>
       <td>${nome}</td>
@@ -184,13 +195,13 @@ function abrirModalDetalheJogador(nome) {
     const jogos      = rodadaData?.jogos || [];
     if (!jogos.length) continue;
 
-    const temResultados = jogos.some(j => j.resultado !== null && j.resultado !== undefined);
+    const temResultados = jogos.some(j => resultadoEfetivo(j) !== null);
     if (!temResultados) continue;
 
     const palpitesRodada = palpitesJogador[rodada] || {};
     let totalRodada = 0;
     const jogoRows = jogos
-      .filter(jogo => jogo.resultado !== null && jogo.resultado !== undefined)
+      .filter(jogo => resultadoEfetivo(jogo) !== null)
       .map(jogo => {
         const palpite = palpitesRodada[jogo.id];
         const pts = palpite ? calcularPonto(palpite, jogo) : 0;
@@ -215,11 +226,12 @@ function abrirModalDetalheJogador(nome) {
           : '—';
         const quemP     = palpite?.passou || '—';
         const placarR   = `${jogo.placar_mandante} x ${jogo.placar_visitante}`;
+        const resEfetivo = resultadoEfetivo(jogo);
 
         return `<tr>
           <td style="font-size:0.8rem">${jogo.mandante} x ${jogo.visitante}</td>
           <td style="font-size:0.8rem;color:#8fa8c0">${placarP} · ${quemP}</td>
-          <td style="font-size:0.8rem;color:#8fa8c0">${placarR} · ${jogo.resultado}</td>
+          <td style="font-size:0.8rem;color:#8fa8c0">${placarR} · ${resEfetivo}</td>
           <td><span class="pts-badge ${ptsClass}">${ptsLabel}</span></td>
           <td style="font-size:0.72rem;color:#8fa8c0">${explicacao}</td>
         </tr>`;
@@ -275,7 +287,7 @@ function renderBracket(data) {
       const jogo      = jogoMap[slot.id] || null;
       const mandante  = jogo?.mandante  || (rodada === 'dezesseis_avos' ? slot.label_mandante  : null);
       const visitante = jogo?.visitante || (rodada === 'dezesseis_avos' ? slot.label_visitante : null);
-      const resultado = jogo?.resultado ?? null;
+      const resultado = jogo ? resultadoEfetivo(jogo) : null;
       const temRes    = resultado !== null;
       const wrapper   = document.createElement('div');
       wrapper.className = 'bracket-match-wrapper';
@@ -370,14 +382,18 @@ function renderPalpiteCards(jogos, palpitesRodada, bloqueado) {
   if (!list) return;
 
   list.innerHTML = jogos.map(jogo => {
-    const p       = palpitesRodada[jogo.id] || {};
-    const mVal    = p.placar_mandante ?? '';
-    const vVal    = p.placar_visitante ?? '';
-    const isEmpate = mVal !== '' && vVal !== '' && Number(mVal) === Number(vVal);
-    const disabled = bloqueado ? 'disabled' : '';
+    const p          = palpitesRodada[jogo.id] || {};
+    const mVal       = p.placar_mandante ?? '';
+    const vVal       = p.placar_visitante ?? '';
+    const hasScores  = mVal !== '' && vVal !== '';
+    const isEmpate   = hasScores && Number(mVal) === Number(vVal);
+    const isNaoEmpate = hasScores && Number(mVal) !== Number(vVal);
+    const autoWinner = isNaoEmpate ? (Number(mVal) > Number(vVal) ? jogo.mandante : jogo.visitante) : '';
+    const disabled   = bloqueado ? 'disabled' : '';
 
     return `
-      <div class="palpite-card" data-jogo-id="${jogo.id}">
+      <div class="palpite-card" data-jogo-id="${jogo.id}"
+           data-mandante="${jogo.mandante}" data-visitante="${jogo.visitante}">
         <h3>${jogo.id}: ${jogo.mandante} x ${jogo.visitante}</h3>
         <div class="placar-row">
           <span class="team-name">${jogo.mandante}</span>
@@ -389,29 +405,44 @@ function renderPalpiteCards(jogos, palpitesRodada, bloqueado) {
           <span class="team-name right">${jogo.visitante}</span>
         </div>
         <div class="passou-row">
-          <label class="passou-label${isEmpate ? ' penaltis' : ''}">${isEmpate ? 'Quem passa nos pênaltis?' : 'Quem avança:'}</label>
-          <select class="passou-select" data-campo="passou" ${disabled}>
-            <option value="">-- selecione --</option>
-            <option value="${jogo.mandante}" ${p.passou === jogo.mandante ? 'selected' : ''}>${jogo.mandante}</option>
-            <option value="${jogo.visitante}" ${p.passou === jogo.visitante ? 'selected' : ''}>${jogo.visitante}</option>
-          </select>
+          <div class="passou-auto" style="${isNaoEmpate ? '' : 'display:none'}">
+            Avança: <strong class="passou-auto-nome">${autoWinner}</strong>
+          </div>
+          <div class="passou-select-wrap" style="${isEmpate ? '' : 'display:none'}">
+            <label class="passou-label penaltis">Quem passa nos pênaltis?</label>
+            <select class="passou-select" data-campo="passou" ${disabled}>
+              <option value="">-- selecione --</option>
+              <option value="${jogo.mandante}" ${p.passou === jogo.mandante ? 'selected' : ''}>${jogo.mandante}</option>
+              <option value="${jogo.visitante}" ${p.passou === jogo.visitante ? 'selected' : ''}>${jogo.visitante}</option>
+            </select>
+          </div>
         </div>
       </div>`;
   }).join('');
 
   if (!bloqueado) {
     list.querySelectorAll('.palpite-card').forEach(card => {
-      const mInput = card.querySelector('[data-campo="placar_mandante"]');
-      const vInput = card.querySelector('[data-campo="placar_visitante"]');
-      const label  = card.querySelector('.passou-label');
-      const updateLabel = () => {
+      const mInput         = card.querySelector('[data-campo="placar_mandante"]');
+      const vInput         = card.querySelector('[data-campo="placar_visitante"]');
+      const passouAuto     = card.querySelector('.passou-auto');
+      const passouAutoNome = card.querySelector('.passou-auto-nome');
+      const passouWrap     = card.querySelector('.passou-select-wrap');
+      const passouSelect   = card.querySelector('.passou-select');
+      const mandante       = card.dataset.mandante;
+      const visitante      = card.dataset.visitante;
+
+      const update = () => {
         const m = mInput.value, v = vInput.value;
-        const empate = m !== '' && v !== '' && Number(m) === Number(v);
-        label.textContent = empate ? 'Quem passa nos pênaltis?' : 'Quem avança:';
-        label.classList.toggle('penaltis', empate);
+        const hasVal  = m !== '' && v !== '';
+        const empate  = hasVal && Number(m) === Number(v);
+        const nEmpate = hasVal && Number(m) !== Number(v);
+        passouWrap.style.display = empate  ? '' : 'none';
+        passouAuto.style.display = nEmpate ? '' : 'none';
+        if (nEmpate) passouAutoNome.textContent = Number(m) > Number(v) ? mandante : visitante;
+        if (!empate) passouSelect.value = '';
       };
-      mInput.addEventListener('input', updateLabel);
-      vInput.addEventListener('input', updateLabel);
+      mInput.addEventListener('input', update);
+      vInput.addEventListener('input', update);
     });
   }
 }
@@ -419,11 +450,20 @@ function renderPalpiteCards(jogos, palpitesRodada, bloqueado) {
 async function salvarPalpites(nome, rodadaAtual) {
   const novosRodada = {};
   document.querySelectorAll('.palpite-card').forEach(card => {
-    const jogoId           = card.dataset.jogoId;
-    const placar_mandante  = Number(card.querySelector('[data-campo="placar_mandante"]').value);
-    const placar_visitante = Number(card.querySelector('[data-campo="placar_visitante"]').value);
-    const passou           = card.querySelector('[data-campo="passou"]').value;
-    novosRodada[jogoId]    = { placar_mandante, placar_visitante, passou };
+    const jogoId    = card.dataset.jogoId;
+    const mandante  = card.dataset.mandante;
+    const visitante = card.dataset.visitante;
+    const pmStr     = card.querySelector('[data-campo="placar_mandante"]').value;
+    const pvStr     = card.querySelector('[data-campo="placar_visitante"]').value;
+    const placar_mandante  = Number(pmStr);
+    const placar_visitante = Number(pvStr);
+    let passou;
+    if (pmStr !== '' && pvStr !== '' && Number(pmStr) !== Number(pvStr)) {
+      passou = Number(pmStr) > Number(pvStr) ? mandante : visitante;
+    } else {
+      passou = card.querySelector('[data-campo="passou"]').value;
+    }
+    novosRodada[jogoId] = { placar_mandante, placar_visitante, passou };
   });
 
   const ref      = doc(db, 'palpites', nome);
@@ -500,7 +540,8 @@ async function initPalpitar(user, dados) {
 
 // ── Aba Palpites ──────────────────────────────────────────────────
 function renderPorJogo(jogo, rodada, todosOsPalpites, participantes, rodadaAberta, session, container) {
-  const temResultado = jogo.resultado !== null && jogo.resultado !== undefined;
+  const res          = resultadoEfetivo(jogo);
+  const temResultado = res !== null;
 
   let resultadoHtml = '';
   if (temResultado) {
@@ -508,7 +549,7 @@ function renderPorJogo(jogo, rodada, todosOsPalpites, participantes, rodadaAbert
       <div class="modal-placar" style="margin-bottom:1rem">
         <div class="mp-times">${jogo.mandante} × ${jogo.visitante}</div>
         <div class="mp-score">${jogo.placar_mandante} – ${jogo.placar_visitante}</div>
-        <div class="mp-passou">Avançou: <strong>${jogo.resultado}</strong></div>
+        <div class="mp-passou">Avançou: <strong>${res}</strong></div>
       </div>`;
   }
 
@@ -520,16 +561,16 @@ function renderPorJogo(jogo, rodada, todosOsPalpites, participantes, rodadaAbert
       return `<tr><td>${nome}</td><td style="color:#4a6a8a">—</td><td style="color:#4a6a8a">—</td><td>—</td></tr>`;
     }
 
-    const placarP      = `${palpite.placar_mandante ?? '?'} x ${palpite.placar_visitante ?? '?'}`;
-    const pts          = temResultado ? calcularPonto(palpite, jogo) : null;
-    const ptsClass     = pts === 2 ? 'pts-2' : pts === 1 ? 'pts-1' : pts === 0 ? 'pts-0' : 'pts-null';
-    const ptsLabel     = pts === null ? '—' : `${pts}`;
-    const acertouPassou = temResultado && palpite.passou === jogo.resultado;
+    const placarP       = `${palpite.placar_mandante ?? '?'} x ${palpite.placar_visitante ?? '?'}`;
+    const pts           = temResultado ? calcularPonto(palpite, jogo) : null;
+    const ptsClass      = pts === 2 ? 'pts-2' : pts === 1 ? 'pts-1' : pts === 0 ? 'pts-0' : 'pts-null';
+    const ptsLabel      = pts === null ? '—' : `${pts}`;
+    const acertouPassou = temResultado && palpite.passou === res;
     const acertouPlacar = temResultado &&
       Number(palpite.placar_mandante) === Number(jogo.placar_mandante) &&
       Number(palpite.placar_visitante) === Number(jogo.placar_visitante);
-    const classPlacar  = acertouPlacar ? 'acertou' : (temResultado ? (acertouPassou ? '' : 'errou') : '');
-    const classPassou  = acertouPassou ? 'acertou' : (temResultado ? 'errou' : '');
+    const classPlacar   = acertouPlacar ? 'acertou' : (temResultado ? (acertouPassou ? '' : 'errou') : '');
+    const classPassou   = acertouPassou ? 'acertou' : (temResultado ? 'errou' : '');
 
     return `<tr>
       <td>${nome}</td>
@@ -557,7 +598,8 @@ function renderPorParticipante(nomeAlvo, jogos, rodada, todosOsPalpites, rodadaA
 
   const rows = jogos.map(jogo => {
     const palpite      = todosOsPalpites[nomeAlvo]?.[rodada]?.[jogo.id];
-    const temResultado = jogo.resultado !== null && jogo.resultado !== undefined;
+    const res          = resultadoEfetivo(jogo);
+    const temResultado = res !== null;
 
     if (!palpite) {
       return `<tr>
@@ -566,16 +608,16 @@ function renderPorParticipante(nomeAlvo, jogos, rodada, todosOsPalpites, rodadaA
       </tr>`;
     }
 
-    const placarP      = `${palpite.placar_mandante ?? '?'} x ${palpite.placar_visitante ?? '?'}`;
-    const pts          = temResultado ? calcularPonto(palpite, jogo) : null;
-    const ptsClass     = pts === 2 ? 'pts-2' : pts === 1 ? 'pts-1' : pts === 0 ? 'pts-0' : 'pts-null';
-    const ptsLabel     = pts === null ? '—' : `${pts}`;
-    const acertouPassou = temResultado && palpite.passou === jogo.resultado;
+    const placarP       = `${palpite.placar_mandante ?? '?'} x ${palpite.placar_visitante ?? '?'}`;
+    const pts           = temResultado ? calcularPonto(palpite, jogo) : null;
+    const ptsClass      = pts === 2 ? 'pts-2' : pts === 1 ? 'pts-1' : pts === 0 ? 'pts-0' : 'pts-null';
+    const ptsLabel      = pts === null ? '—' : `${pts}`;
+    const acertouPassou = temResultado && palpite.passou === res;
     const acertouPlacar = temResultado &&
       Number(palpite.placar_mandante) === Number(jogo.placar_mandante) &&
       Number(palpite.placar_visitante) === Number(jogo.placar_visitante);
-    const classPlacar  = acertouPlacar ? 'acertou' : (temResultado ? (acertouPassou ? '' : 'errou') : '');
-    const classPassou  = acertouPassou ? 'acertou' : (temResultado ? 'errou' : '');
+    const classPlacar   = acertouPlacar ? 'acertou' : (temResultado ? (acertouPassou ? '' : 'errou') : '');
+    const classPassou   = acertouPassou ? 'acertou' : (temResultado ? 'errou' : '');
 
     return `<tr>
       <td>${jogo.mandante} x ${jogo.visitante}</td>
