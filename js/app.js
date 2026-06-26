@@ -29,6 +29,7 @@ async function handleLogin() {
     saveSession(user);
     mostrarApp(user);
   } catch (e) {
+    console.error('[login]', e);
     msg.textContent = 'Erro ao conectar. Tente novamente.';
   }
 }
