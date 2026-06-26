@@ -1,6 +1,14 @@
 import { BRACKET_ESTRUTURA, RODADAS, RODADA_LABELS } from './bracket.js';
 import { db, doc, getDoc, setDoc, getDocs, collection } from './firebase.js';
 import { getSession, saveSession, clearSession } from './auth.js';
+import { calcularPonto } from './scoring.js';
+
+// ── Estado global da sessão ───────────────────────────────────────
+let globalDados          = null;
+let globalTodosPalpites  = null;
+let globalParticipantes  = null;
+let globalPontuacao      = null;
+let globalSession        = null;
 
 // ── Auth ──────────────────────────────────────────────────────────
 async function handleLogin() {
@@ -31,6 +39,7 @@ function handleLogout() {
 }
 
 function mostrarApp(user) {
+  globalSession = user;
   document.getElementById('landing').style.display = 'none';
   document.getElementById('main-content').style.display = '';
   document.getElementById('header-nome').textContent = user.nome;
@@ -57,8 +66,8 @@ async function carregarDados() {
     getDoc(doc(db, 'config', 'app')),
     ...RODADAS.map(r => getDoc(doc(db, 'rodadas', r)))
   ]);
-  const config   = snaps[0].exists() ? snaps[0].data() : { rodada_atual: 'dezesseis_avos' };
-  const rodadas  = {};
+  const config  = snaps[0].exists() ? snaps[0].data() : { rodada_atual: 'dezesseis_avos' };
+  const rodadas = {};
   RODADAS.forEach((r, i) => {
     rodadas[r] = snaps[i + 1].exists()
       ? snaps[i + 1].data()
@@ -91,9 +100,157 @@ async function carregarPontuacao() {
   return result;
 }
 
+// ── Modal ─────────────────────────────────────────────────────────
+function abrirModal(titulo, conteudoHtml) {
+  const overlay = document.getElementById('modal-overlay');
+  overlay.querySelector('.modal-title').textContent = titulo;
+  overlay.querySelector('.modal-body').innerHTML = conteudoHtml;
+  overlay.classList.add('open');
+}
+
+function fecharModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+}
+
+// ── Modal: palpites de uma partida ────────────────────────────────
+function abrirModalPalpitesJogo(jogo, rodada) {
+  const participantes    = globalParticipantes || [];
+  const todosOsPalpites  = globalTodosPalpites || {};
+  const temResultado     = jogo.resultado !== null && jogo.resultado !== undefined;
+
+  let headerHtml = '';
+  if (temResultado) {
+    headerHtml = `
+      <div class="modal-placar">
+        <div class="mp-times">${jogo.mandante} × ${jogo.visitante}</div>
+        <div class="mp-score">${jogo.placar_mandante} – ${jogo.placar_visitante}</div>
+        <div class="mp-passou">Avançou: <strong>${jogo.resultado}</strong></div>
+      </div>`;
+  }
+
+  const rows = participantes.map(nome => {
+    const palpite = todosOsPalpites[nome]?.[rodada]?.[jogo.id];
+    if (!palpite) {
+      return `<tr>
+        <td>${nome}</td>
+        <td style="color:#4a6a8a">—</td>
+        <td style="color:#4a6a8a">—</td>
+        <td><span class="pts-badge pts-null">—</span></td>
+      </tr>`;
+    }
+    const placarP      = `${palpite.placar_mandante ?? '?'} x ${palpite.placar_visitante ?? '?'}`;
+    const pts          = temResultado ? calcularPonto(palpite, jogo) : null;
+    const ptsClass     = pts === 2 ? 'pts-2' : pts === 1 ? 'pts-1' : pts === 0 ? 'pts-0' : 'pts-null';
+    const ptsLabel     = pts === null ? '—' : `${pts} pt${pts !== 1 ? 's' : ''}`;
+    const acertouPassou = temResultado && palpite.passou === jogo.resultado;
+    const acertouPlacar = temResultado &&
+      Number(palpite.placar_mandante) === Number(jogo.placar_mandante) &&
+      Number(palpite.placar_visitante) === Number(jogo.placar_visitante);
+    const classPlacar  = acertouPlacar ? 'acertou' : (temResultado ? (acertouPassou ? '' : 'errou') : '');
+    const classPassou  = acertouPassou ? 'acertou' : (temResultado ? 'errou' : '');
+
+    return `<tr>
+      <td>${nome}</td>
+      <td class="${classPlacar}">${placarP}</td>
+      <td class="${classPassou}">${palpite.passou || '—'}</td>
+      <td><span class="pts-badge ${ptsClass}">${ptsLabel}</span></td>
+    </tr>`;
+  }).join('');
+
+  const conteudo = headerHtml + `
+    <table class="palpites-table">
+      <thead><tr>
+        <th>Participante</th><th>Placar palpitado</th><th>Quem avançou</th><th>Pts</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+
+  abrirModal(`${jogo.id}: ${jogo.mandante} × ${jogo.visitante}`, conteudo);
+}
+
+// ── Modal: breakdown de pontos de um jogador ──────────────────────
+function abrirModalDetalheJogador(nome) {
+  const dados           = globalDados;
+  const todosOsPalpites = globalTodosPalpites;
+  if (!dados || !todosOsPalpites) return;
+
+  const palpitesJogador = todosOsPalpites[nome] || {};
+  let totalGeral = 0;
+  let secoes     = '';
+
+  for (const rodada of RODADAS) {
+    const rodadaData = dados.rodadas[rodada];
+    const jogos      = rodadaData?.jogos || [];
+    if (!jogos.length) continue;
+
+    const temResultados = jogos.some(j => j.resultado !== null && j.resultado !== undefined);
+    if (!temResultados) continue;
+
+    const palpitesRodada = palpitesJogador[rodada] || {};
+    let totalRodada = 0;
+    const jogoRows = jogos
+      .filter(jogo => jogo.resultado !== null && jogo.resultado !== undefined)
+      .map(jogo => {
+        const palpite = palpitesRodada[jogo.id];
+        const pts = palpite ? calcularPonto(palpite, jogo) : 0;
+        if (pts !== null) totalRodada += pts;
+
+        const ptsClass  = pts === 2 ? 'pts-2' : pts === 1 ? 'pts-1' : 'pts-0';
+        const ptsLabel  = `${pts ?? 0} pt${pts !== 1 ? 's' : ''}`;
+
+        let explicacao;
+        if (!palpite) {
+          explicacao = 'sem palpite';
+        } else if (pts === 2) {
+          explicacao = 'placar exato + quem avançou';
+        } else if (pts === 1) {
+          explicacao = 'acertou quem avançou (placar errado)';
+        } else {
+          explicacao = 'errou quem avançou';
+        }
+
+        const placarP   = palpite
+          ? `${palpite.placar_mandante ?? '?'} x ${palpite.placar_visitante ?? '?'}`
+          : '—';
+        const quemP     = palpite?.passou || '—';
+        const placarR   = `${jogo.placar_mandante} x ${jogo.placar_visitante}`;
+
+        return `<tr>
+          <td style="font-size:0.8rem">${jogo.mandante} x ${jogo.visitante}</td>
+          <td style="font-size:0.8rem;color:#8fa8c0">${placarP} · ${quemP}</td>
+          <td style="font-size:0.8rem;color:#8fa8c0">${placarR} · ${jogo.resultado}</td>
+          <td><span class="pts-badge ${ptsClass}">${ptsLabel}</span></td>
+          <td style="font-size:0.72rem;color:#8fa8c0">${explicacao}</td>
+        </tr>`;
+      }).join('');
+
+    totalGeral += totalRodada;
+    secoes += `
+      <div class="breakdown-rodada">
+        <div class="breakdown-rodada-title">
+          <span>${RODADA_LABELS[rodada]}</span>
+          <span>${totalRodada} pt${totalRodada !== 1 ? 's' : ''}</span>
+        </div>
+        <table class="palpites-table" style="width:100%">
+          <thead><tr>
+            <th>Partida</th><th>Palpite</th><th>Resultado</th><th>Pts</th><th>Motivo</th>
+          </tr></thead>
+          <tbody>${jogoRows}</tbody>
+        </table>
+      </div>`;
+  }
+
+  if (!secoes) {
+    secoes = `<p style="color:#8fa8c0">Nenhuma rodada com resultados ainda.</p>`;
+  }
+
+  const conteudo = secoes + `<div class="breakdown-total">Total: ${totalGeral} pt${totalGeral !== 1 ? 's' : ''}</div>`;
+  abrirModal(`Pontuação de ${nome}`, conteudo);
+}
+
 // ── Chaveamento ───────────────────────────────────────────────────
 function renderTeamRow(team, placar, isVencedor) {
-  const isEmpty = !team;
+  const isEmpty   = !team;
   const scoreHtml = isVencedor !== null && placar !== null && placar !== undefined
     ? `<span class="bracket-score">${placar}</span>` : '';
   return `<div class="bracket-team ${isVencedor ? 'vencedor' : ''} ${isEmpty ? 'placeholder' : ''}">
@@ -104,13 +261,15 @@ function renderTeamRow(team, placar, isVencedor) {
 function renderBracket(data) {
   const container = document.getElementById('bracket-container');
   container.innerHTML = '';
+
   for (const rodada of RODADAS) {
-    const estrutura  = BRACKET_ESTRUTURA[rodada];
-    const jogosData  = data.rodadas[rodada]?.jogos ?? [];
-    const jogoMap    = Object.fromEntries(jogosData.map(j => [j.id, j]));
-    const col        = document.createElement('div');
-    col.className    = 'bracket-round';
-    col.innerHTML    = `<div class="bracket-round-title">${RODADA_LABELS[rodada]}</div>`;
+    const estrutura = BRACKET_ESTRUTURA[rodada];
+    const jogosData = data.rodadas[rodada]?.jogos ?? [];
+    const jogoMap   = Object.fromEntries(jogosData.map(j => [j.id, j]));
+    const col       = document.createElement('div');
+    col.className   = 'bracket-round';
+    col.innerHTML   = `<div class="bracket-round-title">${RODADA_LABELS[rodada]}</div>`;
+
     for (const slot of estrutura) {
       const jogo      = jogoMap[slot.id] || null;
       const mandante  = jogo?.mandante  || (rodada === 'dezesseis_avos' ? slot.label_mandante  : null);
@@ -119,15 +278,30 @@ function renderBracket(data) {
       const temRes    = resultado !== null;
       const wrapper   = document.createElement('div');
       wrapper.className = 'bracket-match-wrapper';
+
+      const btnPalpites = (temRes && jogo)
+        ? `<button class="btn-ver-palpites" data-jogo-id="${jogo.id}" data-rodada="${rodada}">Ver palpites</button>`
+        : '';
+
       wrapper.innerHTML = `
         <div class="bracket-match" style="flex:1">
           ${renderTeamRow(mandante,  jogo?.placar_mandante,  temRes ? resultado === mandante  : null)}
           ${renderTeamRow(visitante, jogo?.placar_visitante, temRes ? resultado === visitante : null)}
+          ${btnPalpites}
         </div>`;
       col.appendChild(wrapper);
     }
     container.appendChild(col);
   }
+
+  container.querySelectorAll('.btn-ver-palpites').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const rodada = btn.dataset.rodada;
+      const jogoId = btn.dataset.jogoId;
+      const jogo   = data.rodadas[rodada]?.jogos?.find(j => j.id === jogoId);
+      if (jogo) abrirModalPalpitesJogo(jogo, rodada);
+    });
+  });
 }
 
 // ── Classificação ──────────────────────────────────────────────────
@@ -145,22 +319,34 @@ function renderClassificacao(pontuacao, participantes) {
       ? `<span class="pos-badge pos-${pos}">${pos}</span>`
       : `<span style="color:#8fa8c0">${pos}</span>`;
     return `<tr>
-      <td>${badgeHtml}</td><td>${nome}</td>
+      <td>${badgeHtml}</td>
+      <td><button class="nome-link" data-nome="${nome}">${nome}</button></td>
       <td>${p.dezesseis_avos}</td><td>${p.oitavas}</td><td>${p.quartas}</td>
       <td>${p.semi}</td><td>${p.final}</td>
       <td class="total-cell">${p.total}</td>
     </tr>`;
   }).join('');
+
+  tbody.querySelectorAll('.nome-link').forEach(btn => {
+    btn.addEventListener('click', () => abrirModalDetalheJogador(btn.dataset.nome));
+  });
 }
 
 // ── Init principal ────────────────────────────────────────────────
 async function carregarEInicializar(user) {
   try {
-    const [dados, participantes, pontuacao] = await Promise.all([
+    const [dados, participantes, pontuacao, todosPalpites] = await Promise.all([
       carregarDados(),
       carregarTodosParticipantes(),
-      carregarPontuacao()
+      carregarPontuacao(),
+      carregarTodosPalpites()
     ]);
+
+    globalDados         = dados;
+    globalParticipantes = participantes;
+    globalPontuacao     = pontuacao;
+    globalTodosPalpites = todosPalpites;
+
     renderBracket(dados);
     renderClassificacao(pontuacao, participantes);
     await initPalpitar(user, dados);
@@ -183,9 +369,9 @@ function renderPalpiteCards(jogos, palpitesRodada, bloqueado) {
   if (!list) return;
 
   list.innerHTML = jogos.map(jogo => {
-    const p = palpitesRodada[jogo.id] || {};
-    const mVal = p.placar_mandante ?? '';
-    const vVal = p.placar_visitante ?? '';
+    const p       = palpitesRodada[jogo.id] || {};
+    const mVal    = p.placar_mandante ?? '';
+    const vVal    = p.placar_visitante ?? '';
     const isEmpate = mVal !== '' && vVal !== '' && Number(mVal) === Number(vVal);
     const disabled = bloqueado ? 'disabled' : '';
 
@@ -232,34 +418,34 @@ function renderPalpiteCards(jogos, palpitesRodada, bloqueado) {
 async function salvarPalpites(nome, rodadaAtual) {
   const novosRodada = {};
   document.querySelectorAll('.palpite-card').forEach(card => {
-    const jogoId          = card.dataset.jogoId;
-    const placar_mandante = Number(card.querySelector('[data-campo="placar_mandante"]').value);
-    const placar_visitante= Number(card.querySelector('[data-campo="placar_visitante"]').value);
-    const passou          = card.querySelector('[data-campo="passou"]').value;
-    novosRodada[jogoId]   = { placar_mandante, placar_visitante, passou };
+    const jogoId           = card.dataset.jogoId;
+    const placar_mandante  = Number(card.querySelector('[data-campo="placar_mandante"]').value);
+    const placar_visitante = Number(card.querySelector('[data-campo="placar_visitante"]').value);
+    const passou           = card.querySelector('[data-campo="passou"]').value;
+    novosRodada[jogoId]    = { placar_mandante, placar_visitante, passou };
   });
 
-  const ref     = doc(db, 'palpites', nome);
-  const current = await getDoc(ref);
+  const ref      = doc(db, 'palpites', nome);
+  const current  = await getDoc(ref);
   const existing = current.exists() ? current.data() : {};
   existing[rodadaAtual] = novosRodada;
   await setDoc(ref, existing);
 }
 
 async function initPalpitar(user, dados) {
-  const form   = document.getElementById('palpitar-form');
-  const acoes  = document.getElementById('palpitar-acoes');
+  const form        = document.getElementById('palpitar-form');
+  const acoes       = document.getElementById('palpitar-acoes');
   const rodadaAtual = dados.config.rodada_atual;
   const rodadaData  = dados.rodadas[rodadaAtual];
 
   if (!rodadaData || rodadaData.status === 'nao_iniciada') {
-    form.innerHTML = `<div class="rodada-fechada-aviso">Nenhuma rodada aberta. Aguarde o admin.</div>`;
+    form.innerHTML  = `<div class="rodada-fechada-aviso">Nenhuma rodada aberta. Aguarde o admin.</div>`;
     acoes.innerHTML = '';
     return;
   }
 
   if (rodadaData.status === 'fechada' || rodadaData.status === 'concluida') {
-    form.innerHTML = `<div class="rodada-fechada-aviso">Rodada encerrada. Não é mais possível alterar palpites.</div>`;
+    form.innerHTML  = `<div class="rodada-fechada-aviso">Rodada encerrada. Não é mais possível alterar palpites.</div>`;
     acoes.innerHTML = '';
     return;
   }
@@ -269,18 +455,20 @@ async function initPalpitar(user, dados) {
   let headerHtml = '';
   if (rodadaData.horario_abertura) {
     const dt = new Date(rodadaData.horario_abertura);
-    headerHtml = `<p class="rodada-horario">Início da rodada: <strong>${dt.toLocaleString('pt-BR')}</strong>${bloqueado ? ' — <span style="color:#ff8a8a">palpites encerrados</span>' : ' — palpites fecham 1h antes'}</p>`;
+    headerHtml = `<p class="rodada-horario">Início da rodada: <strong>${dt.toLocaleString('pt-BR')}</strong>${
+      bloqueado ? ' — <span style="color:#ff8a8a">palpites encerrados</span>' : ' — palpites fecham 1h antes'
+    }</p>`;
   }
 
   if (bloqueado) {
-    form.innerHTML = headerHtml + `<div class="rodada-fechada-aviso">Palpites encerrados — jogos começam em breve.</div>`;
+    form.innerHTML  = headerHtml + `<div class="rodada-fechada-aviso">Palpites encerrados — jogos começam em breve.</div>`;
     acoes.innerHTML = '';
     return;
   }
 
   const jogos = rodadaData.jogos || [];
   if (!jogos.length) {
-    form.innerHTML = headerHtml + `<p style="color:#8fa8c0">Aguardando admin preencher os times.</p>`;
+    form.innerHTML  = headerHtml + `<p style="color:#8fa8c0">Aguardando admin preencher os times.</p>`;
     acoes.innerHTML = '';
     return;
   }
@@ -288,14 +476,14 @@ async function initPalpitar(user, dados) {
   const palpitesUsuario = await carregarPalpitesUsuario(user.nome);
   const palpitesRodada  = palpitesUsuario[rodadaAtual] || {};
 
-  form.innerHTML = headerHtml + `<div class="palpite-list"><div id="palpite-list-inner"></div></div>`;
+  form.innerHTML  = headerHtml + `<div class="palpite-list"><div id="palpite-list-inner"></div></div>`;
   acoes.innerHTML = `<button class="btn btn-primary" id="btn-salvar-palpites">Salvar palpites</button>`;
 
   renderPalpiteCards(jogos, palpitesRodada, false);
 
   document.getElementById('btn-salvar-palpites').addEventListener('click', async () => {
     const btn = document.getElementById('btn-salvar-palpites');
-    btn.disabled = true;
+    btn.disabled    = true;
     btn.textContent = 'Salvando...';
     try {
       await salvarPalpites(user.nome, rodadaAtual);
@@ -303,94 +491,154 @@ async function initPalpitar(user, dados) {
       setTimeout(() => { btn.disabled = false; btn.textContent = 'Salvar palpites'; }, 2000);
     } catch (e) {
       alert('Erro ao salvar: ' + e.message);
-      btn.disabled = false;
+      btn.disabled    = false;
       btn.textContent = 'Salvar palpites';
     }
   });
 }
 
 // ── Aba Palpites ──────────────────────────────────────────────────
-function renderPorJogo(jogo, todosOsPalpites, participantes, rodadaAtual, rodadaAberta, session, container) {
+function renderPorJogo(jogo, rodada, todosOsPalpites, participantes, rodadaAberta, session, container) {
+  const temResultado = jogo.resultado !== null && jogo.resultado !== undefined;
+
+  let resultadoHtml = '';
+  if (temResultado) {
+    resultadoHtml = `
+      <div class="modal-placar" style="margin-bottom:1rem">
+        <div class="mp-times">${jogo.mandante} × ${jogo.visitante}</div>
+        <div class="mp-score">${jogo.placar_mandante} – ${jogo.placar_visitante}</div>
+        <div class="mp-passou">Avançou: <strong>${jogo.resultado}</strong></div>
+      </div>`;
+  }
+
   const rows = participantes.map(nome => {
-    const palpite = todosOsPalpites[nome]?.[rodadaAtual]?.[jogo.id];
+    const palpite = todosOsPalpites[nome]?.[rodada]?.[jogo.id];
     const visivel = !rodadaAberta || session.isAdmin || nome === session.nome;
 
     if (!palpite || !visivel) {
-      return `<tr><td>${nome}</td><td style="color:#4a6a8a">—</td><td style="color:#4a6a8a">—</td></tr>`;
+      return `<tr><td>${nome}</td><td style="color:#4a6a8a">—</td><td style="color:#4a6a8a">—</td><td>—</td></tr>`;
     }
-    const placar = `${palpite.placar_mandante ?? '?'} x ${palpite.placar_visitante ?? '?'}`;
-    const passou = palpite.passou || '—';
-    const acertouPassou = jogo.resultado && palpite.passou === jogo.resultado;
-    const acertouPlacar = jogo.resultado &&
+
+    const placarP      = `${palpite.placar_mandante ?? '?'} x ${palpite.placar_visitante ?? '?'}`;
+    const pts          = temResultado ? calcularPonto(palpite, jogo) : null;
+    const ptsClass     = pts === 2 ? 'pts-2' : pts === 1 ? 'pts-1' : pts === 0 ? 'pts-0' : 'pts-null';
+    const ptsLabel     = pts === null ? '—' : `${pts}`;
+    const acertouPassou = temResultado && palpite.passou === jogo.resultado;
+    const acertouPlacar = temResultado &&
       Number(palpite.placar_mandante) === Number(jogo.placar_mandante) &&
       Number(palpite.placar_visitante) === Number(jogo.placar_visitante);
-    const classPts = acertouPassou ? (acertouPlacar ? 'acertou' : '') : (jogo.resultado ? 'errou' : '');
+    const classPlacar  = acertouPlacar ? 'acertou' : (temResultado ? (acertouPassou ? '' : 'errou') : '');
+    const classPassou  = acertouPassou ? 'acertou' : (temResultado ? 'errou' : '');
+
     return `<tr>
       <td>${nome}</td>
-      <td class="${classPts}">${placar}</td>
-      <td class="${acertouPassou ? 'acertou' : jogo.resultado ? 'errou' : ''}">${passou}</td>
+      <td class="${classPlacar}">${placarP}</td>
+      <td class="${classPassou}">${palpite.passou || '—'}</td>
+      <td><span class="pts-badge ${ptsClass}">${ptsLabel}</span></td>
     </tr>`;
   }).join('');
 
-  container.innerHTML = `
+  container.innerHTML = resultadoHtml + `
     <table class="palpites-table">
-      <thead><tr><th>Participante</th><th>Placar palpitado</th><th>Quem avança</th></tr></thead>
+      <thead><tr>
+        <th>Participante</th><th>Placar palpitado</th><th>Quem avança</th><th>Pts</th>
+      </tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
 }
 
-function renderPorParticipante(nomeAlvo, jogos, todosOsPalpites, rodadaAtual, rodadaAberta, session, container) {
+function renderPorParticipante(nomeAlvo, jogos, rodada, todosOsPalpites, rodadaAberta, session, container) {
   const podeMostrar = !rodadaAberta || session.isAdmin || nomeAlvo === session.nome;
   if (!podeMostrar) {
     container.innerHTML = `<div class="rodada-fechada-aviso">Palpites de outros participantes ficam visíveis após a rodada fechar.</div>`;
     return;
   }
+
   const rows = jogos.map(jogo => {
-    const palpite = todosOsPalpites[nomeAlvo]?.[rodadaAtual]?.[jogo.id];
-    if (!palpite) return `<tr><td>${jogo.mandante} x ${jogo.visitante}</td><td style="color:#4a6a8a">—</td><td style="color:#4a6a8a">—</td></tr>`;
-    const placar = `${palpite.placar_mandante ?? '?'} x ${palpite.placar_visitante ?? '?'}`;
-    const acertouPassou = jogo.resultado && palpite.passou === jogo.resultado;
-    const acertouPlacar = jogo.resultado &&
+    const palpite      = todosOsPalpites[nomeAlvo]?.[rodada]?.[jogo.id];
+    const temResultado = jogo.resultado !== null && jogo.resultado !== undefined;
+
+    if (!palpite) {
+      return `<tr>
+        <td>${jogo.mandante} x ${jogo.visitante}</td>
+        <td style="color:#4a6a8a">—</td><td style="color:#4a6a8a">—</td><td>—</td>
+      </tr>`;
+    }
+
+    const placarP      = `${palpite.placar_mandante ?? '?'} x ${palpite.placar_visitante ?? '?'}`;
+    const pts          = temResultado ? calcularPonto(palpite, jogo) : null;
+    const ptsClass     = pts === 2 ? 'pts-2' : pts === 1 ? 'pts-1' : pts === 0 ? 'pts-0' : 'pts-null';
+    const ptsLabel     = pts === null ? '—' : `${pts}`;
+    const acertouPassou = temResultado && palpite.passou === jogo.resultado;
+    const acertouPlacar = temResultado &&
       Number(palpite.placar_mandante) === Number(jogo.placar_mandante) &&
       Number(palpite.placar_visitante) === Number(jogo.placar_visitante);
-    const classPts = acertouPassou ? (acertouPlacar ? 'acertou' : '') : (jogo.resultado ? 'errou' : '');
+    const classPlacar  = acertouPlacar ? 'acertou' : (temResultado ? (acertouPassou ? '' : 'errou') : '');
+    const classPassou  = acertouPassou ? 'acertou' : (temResultado ? 'errou' : '');
+
     return `<tr>
       <td>${jogo.mandante} x ${jogo.visitante}</td>
-      <td class="${classPts}">${placar}</td>
-      <td class="${acertouPassou ? 'acertou' : jogo.resultado ? 'errou' : ''}">${palpite.passou || '—'}</td>
+      <td class="${classPlacar}">${placarP}</td>
+      <td class="${classPassou}">${palpite.passou || '—'}</td>
+      <td><span class="pts-badge ${ptsClass}">${ptsLabel}</span></td>
     </tr>`;
   }).join('');
+
   container.innerHTML = `
     <table class="palpites-table">
-      <thead><tr><th>Jogo</th><th>Placar palpitado</th><th>Quem avança</th></tr></thead>
+      <thead><tr>
+        <th>Jogo</th><th>Placar palpitado</th><th>Quem avança</th><th>Pts</th>
+      </tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
 }
 
-async function initPalpitesTab(user, dados, participantes) {
-  const rodadaAtual  = dados.config.rodada_atual;
-  const rodadaData   = dados.rodadas[rodadaAtual];
-  const jogos        = rodadaData?.jogos || [];
-  const rodadaAberta = rodadaData?.status === 'aberta';
+function initPalpitesTab(user, dados, participantes) {
+  const todasRodadasComJogos = RODADAS.filter(r => (dados.rodadas[r]?.jogos || []).length > 0);
+  const rodadaAtual          = dados.config.rodada_atual;
+  const rodadaInicial        = todasRodadasComJogos.includes(rodadaAtual)
+    ? rodadaAtual
+    : (todasRodadasComJogos[todasRodadasComJogos.length - 1] || rodadaAtual);
 
-  // Carregamento lazy: carrega na primeira vez que a aba é aberta
-  let todosOsPalpites = null;
-  document.querySelector('[data-tab="palpites"]').addEventListener('click', async () => {
-    if (todosOsPalpites) return;
-    todosOsPalpites = await carregarTodosPalpites();
-    renderPalpitesContent(modoAtual);
-  });
+  let modoAtual         = 'jogo';
+  let rodadaSelecionada = rodadaInicial;
+  let initialized       = false;
 
-  let modoAtual = 'jogo';
   const controls = document.querySelector('.palpites-tab-controls');
 
+  function getRodadaInfo() {
+    const rd = dados.rodadas[rodadaSelecionada];
+    return { jogos: rd?.jogos || [], rodadaAberta: rd?.status === 'aberta' };
+  }
+
+  function renderRodadaSelector() {
+    const existing = document.getElementById('palpites-rodada-select-container');
+    if (existing) existing.remove();
+    if (todasRodadasComJogos.length <= 1) return;
+
+    const div = document.createElement('div');
+    div.id = 'palpites-rodada-select-container';
+    div.className = 'palpites-rodada-header';
+    div.innerHTML = `
+      <label style="font-size:0.85rem;color:#8fa8c0">Rodada:</label>
+      <select class="select-field" id="select-rodada-palpites-tab">
+        ${todasRodadasComJogos.map(r =>
+          `<option value="${r}" ${r === rodadaSelecionada ? 'selected' : ''}>${RODADA_LABELS[r]}</option>`
+        ).join('')}
+      </select>`;
+    controls.parentNode.insertBefore(div, controls);
+
+    document.getElementById('select-rodada-palpites-tab').addEventListener('change', e => {
+      rodadaSelecionada = e.target.value;
+      renderPalpitesContent(modoAtual);
+    });
+  }
+
   function renderPalpitesContent(modo) {
-    if (!todosOsPalpites) {
-      document.getElementById('palpites-content').innerHTML = `<p style="color:#8fa8c0">Carregando palpites...</p>`;
-      return;
-    }
-    const selectContainer = document.getElementById('palpites-select-container');
-    const content = document.getElementById('palpites-content');
+    const { jogos, rodadaAberta } = getRodadaInfo();
+    const todosOsPalpites         = globalTodosPalpites || {};
+    const selectContainer         = document.getElementById('palpites-select-container');
+    const content                 = document.getElementById('palpites-content');
 
     if (modo === 'jogo') {
       selectContainer.innerHTML = jogos.length
@@ -399,13 +647,14 @@ async function initPalpitesTab(user, dados, participantes) {
              <option value="">-- selecione --</option>
              ${jogos.map(j => `<option value="${j.id}">${j.id}: ${j.mandante} x ${j.visitante}</option>`).join('')}
            </select>`
-        : `<p style="color:#8fa8c0">Nenhum jogo na rodada atual.</p>`;
+        : `<p style="color:#8fa8c0">Nenhum jogo nesta rodada.</p>`;
       content.innerHTML = '';
+
       if (jogos.length) {
         document.getElementById('select-jogo-palpites').addEventListener('change', e => {
           if (!e.target.value) { content.innerHTML = ''; return; }
           const jogo = jogos.find(j => j.id === e.target.value);
-          renderPorJogo(jogo, todosOsPalpites, participantes, rodadaAtual, rodadaAberta, user, content);
+          renderPorJogo(jogo, rodadaSelecionada, todosOsPalpites, participantes, rodadaAberta, user, content);
         });
       }
     } else {
@@ -417,21 +666,29 @@ async function initPalpitesTab(user, dados, participantes) {
            </select>`
         : `<p style="color:#8fa8c0">Nenhum participante cadastrado.</p>`;
       content.innerHTML = '';
+
       if (participantes.length) {
         document.getElementById('select-participante-palpites').addEventListener('change', e => {
           if (!e.target.value) { content.innerHTML = ''; return; }
-          renderPorParticipante(e.target.value, jogos, todosOsPalpites, rodadaAtual, rodadaAberta, user, content);
+          renderPorParticipante(e.target.value, jogos, rodadaSelecionada, todosOsPalpites, rodadaAberta, user, content);
         });
       }
     }
   }
+
+  document.querySelector('[data-tab="palpites"]').addEventListener('click', () => {
+    if (initialized) return;
+    initialized = true;
+    renderRodadaSelector();
+    renderPalpitesContent(modoAtual);
+  });
 
   controls.querySelectorAll('.palpites-mode-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       controls.querySelectorAll('.palpites-mode-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       modoAtual = btn.dataset.mode;
-      renderPalpitesContent(modoAtual);
+      if (initialized) renderPalpitesContent(modoAtual);
     });
   });
 }
@@ -443,6 +700,11 @@ async function init() {
     if (e.key === 'Enter') handleLogin();
   });
   document.getElementById('btn-logout').addEventListener('click', handleLogout);
+
+  const overlay = document.getElementById('modal-overlay');
+  overlay.addEventListener('click', e => { if (e.target === overlay) fecharModal(); });
+  overlay.querySelector('.modal-close').addEventListener('click', fecharModal);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharModal(); });
 
   const session = getSession();
   if (session) mostrarApp(session);
