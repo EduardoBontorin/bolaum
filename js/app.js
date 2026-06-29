@@ -496,7 +496,7 @@ async function initPalpitar(user, dados) {
     return;
   }
 
-  if (rodadaData.status === 'fechada' || rodadaData.status === 'concluida') {
+  if (rodadaData.status === 'concluida') {
     form.innerHTML  = `<div class="rodada-fechada-aviso">Rodada encerrada. Não é mais possível alterar palpites.</div>`;
     acoes.innerHTML = '';
     return;
