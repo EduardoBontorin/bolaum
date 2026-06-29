@@ -105,7 +105,7 @@ async function renderRodadaAdmin() {
   const instrucoes = {
     nao_iniciada: 'Preencha os times, salve e clique <strong>Abrir rodada</strong>.',
     aberta:       'Rodada aberta — participantes podem palpitar. Clique <strong>Fechar rodada</strong> quando os jogos começarem.',
-    fechada:      'Rodada fechada. Vá em <strong>Resultados</strong> para inserir placares e calcular pontos.',
+    fechada:      'Rodada fechada — insira os resultados em <strong>Resultados</strong>. Pontos são recalculados automaticamente ao salvar.',
     concluida:    'Pontos calculados. Preencha os times da próxima fase e clique <strong>Abrir próxima rodada</strong>.'
   };
 
@@ -152,11 +152,13 @@ async function renderRodadaAdmin() {
   const btnSalvarTimes  = document.getElementById('btn-salvar-times');
   const btnAbrir        = document.getElementById('btn-abrir-rodada');
   const btnFechar       = document.getElementById('btn-fechar-rodada');
+  const btnReabrir      = document.getElementById('btn-reabrir-rodada');
   const btnProxima      = document.getElementById('btn-abrir-proxima');
 
   btnSalvarTimes.style.display = (status === 'nao_iniciada' || status === 'aberta') ? '' : 'none';
   btnAbrir.style.display       = status === 'nao_iniciada' ? '' : 'none';
   btnFechar.style.display      = status === 'aberta'       ? '' : 'none';
+  btnReabrir.style.display     = status === 'concluida'    ? '' : 'none';
   btnProxima.style.display     = (status === 'concluida' || status === 'fechada') ? '' : 'none';
 
   btnSalvarTimes.onclick = async () => {
@@ -194,12 +196,15 @@ async function renderRodadaAdmin() {
     renderRodadaAdmin();
   };
 
+  btnReabrir.onclick = async () => {
+    if (!confirm(`Reabrir "${RODADA_LABELS[rodadaAtual]}" para inserção de resultados?`)) return;
+    await setDoc(doc(db, 'rodadas', rodadaAtual), { ...rodadaData, status: 'fechada' });
+    renderRodadaAdmin();
+  };
+
   btnProxima.onclick = async () => {
     const idx = RODADAS.indexOf(rodadaAtual);
     if (idx === RODADAS.length - 1) { alert('Esta é a última rodada.'); return; }
-    if (status !== 'concluida') {
-      if (!confirm('Pontos ainda não calculados. Avançar mesmo assim?')) return;
-    }
     const proxima = RODADAS[idx + 1];
     const proximaSnap = await getDoc(doc(db, 'rodadas', proxima));
     const proximaData = proximaSnap.exists()
@@ -207,11 +212,38 @@ async function renderRodadaAdmin() {
       : { status: 'nao_iniciada', jogos: [], horario_abertura: null };
     await Promise.all([
       setDoc(doc(db, 'config', 'app'), { rodada_atual: proxima }),
-      setDoc(doc(db, 'rodadas', proxima), { ...proximaData, status: 'aberta' })
+      setDoc(doc(db, 'rodadas', proxima), { ...proximaData, status: 'aberta' }),
+      setDoc(doc(db, 'rodadas', rodadaAtual), { ...rodadaData, status: 'concluida' })
     ]);
     alert(`"${RODADA_LABELS[proxima]}" aberta. Preencha os times.`);
     renderRodadaAdmin();
   };
+}
+
+// ── Recálculo de pontos ───────────────────────────────────────────
+async function recalcularESalvarPontos() {
+  const [usuariosSnap, palpitesSnap, ...rodadasSnaps] = await Promise.all([
+    getDocs(collection(db, 'usuarios')),
+    getDocs(collection(db, 'palpites')),
+    ...RODADAS.map(r => getDoc(doc(db, 'rodadas', r)))
+  ]);
+
+  const participantes = usuariosSnap.docs.map(d => d.id);
+  const palpites = {};
+  palpitesSnap.forEach(d => { palpites[d.id] = d.data(); });
+  const rodadas = {};
+  RODADAS.forEach((r, i) => {
+    rodadas[r] = rodadasSnaps[i].exists()
+      ? rodadasSnaps[i].data()
+      : { status: 'nao_iniciada', jogos: [] };
+  });
+
+  const novaPontuacao = calcularTodosPontos({ participantes, rodadas, palpites });
+  await Promise.all(
+    participantes.map(nome =>
+      setDoc(doc(db, 'pontuacao', nome), novaPontuacao[nome] || { dezesseis_avos: 0, oitavas: 0, quartas: 0, semi: 0, final: 0, total: 0 })
+    )
+  );
 }
 
 // ── Resultados ────────────────────────────────────────────────────
@@ -227,8 +259,8 @@ async function renderResultadosAdmin() {
     : { status: 'nao_iniciada', jogos: [] };
 
   const form = document.getElementById('resultados-form');
-  if (rodadaData.status !== 'aberta' && rodadaData.status !== 'fechada') {
-    form.innerHTML = `<p style="color:#8fa8c0">Nenhuma rodada aberta ou fechada para inserir resultados.</p>`;
+  if (rodadaData.status === 'nao_iniciada') {
+    form.innerHTML = `<p style="color:#8fa8c0">Nenhuma rodada em andamento para inserir resultados.</p>`;
     return;
   }
 
@@ -305,40 +337,11 @@ async function renderResultadosAdmin() {
       return { ...jogo, placar_mandante: pm, placar_visitante: pv, resultado };
     });
     await setDoc(doc(db, 'rodadas', rodadaAtual), { ...rodadaData, jogos: novosJogos });
-    alert('Resultados salvos. Clique "Calcular pontos" quando todos os jogos tiverem resultado.');
+    await recalcularESalvarPontos();
+    alert('Resultados salvos e pontos atualizados!');
   };
 
-  document.getElementById('btn-calcular-pontos').onclick = async () => {
-    if (!confirm('Calcular pontos para todos? Isso sobrescreve a pontuação atual desta rodada.')) return;
-
-    const [usuariosSnap, palpitesSnap, ...rodadasSnaps] = await Promise.all([
-      getDocs(collection(db, 'usuarios')),
-      getDocs(collection(db, 'palpites')),
-      ...RODADAS.map(r => getDoc(doc(db, 'rodadas', r)))
-    ]);
-
-    const participantes = usuariosSnap.docs.map(d => d.id);
-    const palpites = {};
-    palpitesSnap.forEach(d => { palpites[d.id] = d.data(); });
-    const rodadas = {};
-    RODADAS.forEach((r, i) => {
-      rodadas[r] = rodadasSnaps[i].exists()
-        ? rodadasSnaps[i].data()
-        : { status: 'nao_iniciada', jogos: [] };
-    });
-
-    const novaPontuacao = calcularTodosPontos({ participantes, rodadas, palpites });
-
-    await Promise.all([
-      ...participantes.map(nome =>
-        setDoc(doc(db, 'pontuacao', nome), novaPontuacao[nome] || { dezesseis_avos: 0, oitavas: 0, quartas: 0, semi: 0, final: 0, total: 0 })
-      ),
-      setDoc(doc(db, 'rodadas', rodadaAtual), { ...rodadas[rodadaAtual], status: 'concluida' })
-    ]);
-
-    alert('Pontos calculados e salvos no Firestore!');
-    renderResultadosAdmin();
-  };
+  document.getElementById('btn-calcular-pontos').style.display = 'none';
 }
 
 // ── Zerar Campeonato ──────────────────────────────────────────────
