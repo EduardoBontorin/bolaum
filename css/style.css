@@ -536,7 +536,16 @@ a { color: inherit; text-decoration: none; }
 .passou-label { min-width: 170px; }
 .passou-label.penaltis { color: #f5a623; font-weight: 600; }
 
-/* ── Aba Palpites — filtro de rodada ── */
+/* ── Aba Palpites ── */
+.palpites-tab-controls {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.palpites-mode-btn { opacity: 0.6; }
+.palpites-mode-btn.active { opacity: 1; }
+
 .palpites-round-filter {
   display: flex;
   flex-wrap: wrap;
