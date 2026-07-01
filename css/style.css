@@ -432,8 +432,80 @@ a { color: inherit; text-decoration: none; }
   .placar-row .team-name { font-size: 0.85rem; }
 }
 
-/* ── Landing com senha ── */
+/* ── Landing / Login ── */
+.landing-overlay {
+  position: fixed;
+  inset: 0;
+  background: #0a1628;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 900;
+}
+
+.landing-card {
+  background: linear-gradient(160deg, #1a3a5c 0%, #0d2137 100%);
+  border: 1px solid #2a4a7c;
+  border-radius: 16px;
+  padding: 2.5rem 2rem;
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.landing-card h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #f5a623;
+  margin-bottom: 0.4rem;
+  text-align: center;
+}
+
+.landing-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  line-height: 1;
+}
+
+.landing-subtitle {
+  font-size: 0.88rem;
+  color: #8fa8c0;
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+.landing-input {
+  width: 100%;
+  padding: 0.65rem 0.9rem;
+  background: #0d2137;
+  border: 1px solid #2a4a7c;
+  border-radius: 8px;
+  color: #e8eaf0;
+  font-size: 1rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.landing-input:focus { border-color: #f5a623; }
 .landing-input + .landing-input { margin-top: 0.75rem; }
+
+.landing-btn-enter {
+  width: 100%;
+  margin-top: 1.25rem;
+  padding: 0.7rem;
+  font-size: 1rem;
+}
+
+.landing-msg {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: #ff8a8a;
+  text-align: center;
+  min-height: 1.2em;
+}
 
 /* ── Header extras ── */
 .header-actions {
