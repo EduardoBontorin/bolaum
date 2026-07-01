@@ -536,15 +536,27 @@ a { color: inherit; text-decoration: none; }
 .passou-label { min-width: 170px; }
 .passou-label.penaltis { color: #f5a623; font-weight: 600; }
 
-/* ── Aba Palpites ── */
-.palpites-tab-controls {
+/* ── Aba Palpites — filtro de rodada ── */
+.palpites-round-filter {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   margin-bottom: 1.25rem;
 }
 
-.palpites-mode-btn { opacity: 0.6; }
-.palpites-mode-btn.active { opacity: 1; }
+.round-filter-btn {
+  padding: 0.35rem 0.9rem;
+  background: #1a3a5c;
+  border: 1px solid #2a4a7c;
+  border-radius: 20px;
+  color: #8fa8c0;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 600;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.round-filter-btn:hover { color: #e8eaf0; background: #2a4a7c; }
+.round-filter-btn.active { background: #f5a623; color: #0a1628; border-color: #f5a623; }
 
 .palpites-table {
   width: 100%;
@@ -744,10 +756,88 @@ a { color: inherit; text-decoration: none; }
 }
 .nome-link:hover { color: #f5a623; text-decoration-color: #f5a623; }
 
-/* Seletor de rodada na aba Palpites */
-.palpites-rodada-header {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
+/* ── Tabela Geral de Palpites ── */
+.tg-scroll { overflow-x: auto; }
+
+.tabela-geral {
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  min-width: 100%;
 }
+
+.tabela-geral thead th {
+  padding: 0.55rem 0.7rem;
+  background: #1a3a5c;
+  color: #f5a623;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  border-bottom: 2px solid #2a4a7c;
+  white-space: nowrap;
+}
+
+.tg-jogo-header { text-align: left; min-width: 170px; position: sticky; left: 0; background: #1a3a5c; }
+
+.tg-col-nome {
+  text-align: center;
+  min-width: 90px;
+  max-width: 120px;
+}
+
+.tg-jogo {
+  padding: 0.55rem 0.7rem;
+  border-bottom: 1px solid #1e3a5a;
+  vertical-align: middle;
+  position: sticky;
+  left: 0;
+  background: #0d2137;
+  z-index: 1;
+}
+
+.tabela-geral tbody tr:hover .tg-jogo { background: #112233; }
+
+.tg-teams {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #e8eaf0;
+  white-space: nowrap;
+}
+
+.tg-resultado {
+  font-size: 0.72rem;
+  color: #7dffaa;
+  margin-top: 0.15rem;
+}
+
+.tg-cell {
+  padding: 0.45rem 0.65rem;
+  border-bottom: 1px solid #1e3a5a;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.tabela-geral tbody tr:hover .tg-cell { background: #1a3a5c44; }
+
+.tg-empty { color: #4a6a8a; font-size: 0.9rem; }
+
+.tg-hidden { color: #4a6a8a; font-size: 0.8rem; cursor: default; }
+
+.tg-placar {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #e8eaf0;
+  line-height: 1.2;
+}
+
+.tg-passou {
+  font-size: 0.72rem;
+  color: #8fa8c0;
+  margin-top: 0.1rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100px;
+}
+
+.tabela-geral .acertou { color: #7dffaa; }
+.tabela-geral .errou   { color: #ff8a8a; }
